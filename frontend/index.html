@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETF 智投分析面板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d28;
+  --surface2: #212433;
+  --border: #2a2d3a;
+  --text: #e1e4ed;
+  --text2: #8b8fa3;
+  --red: #ef4444;
+  --green: #22c55e;
+  --blue: #3b82f6;
+  --yellow: #f59e0b;
+  --purple: #a855f7;
+  --cyan: #06b6d4;
+  --radius: 10px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+}
+
+/* Layout */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px);
+}
+.app-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+.market-badge {
+  padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;
+}
+.market-badge.bull { background: rgba(239,68,68,.15); color: var(--red); }
+.market-badge.bear { background: rgba(34,197,94,.15); color: var(--green); }
+.market-badge.range { background: rgba(245,158,11,.15); color: var(--yellow); }
+.refresh-btn {
+  background: var(--blue); color: #fff; border: none;
+  padding: 6px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+  transition: opacity .2s;
+}
+.refresh-btn:hover { opacity: .85; }
+.refresh-btn:disabled { opacity: .5; cursor: not-allowed; }
+.last-update { font-size: 12px; color: var(--text2); }
+
+.main-content { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--surface); border-radius: var(--radius); padding: 4px; }
+.tab-btn {
+  flex: 1; padding: 10px 20px; border: none; background: transparent;
+  color: var(--text2); font-size: 14px; font-weight: 600; cursor: pointer;
+  border-radius: 8px; transition: all .2s;
+}
+.tab-btn.active { background: var(--surface2); color: var(--text); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title { font-size: 16px; font-weight: 700; }
+.card-subtitle { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; color: var(--text2); font-weight: 600; font-size: 12px; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: rgba(255,255,255,.02); }
+
+.price-up { color: var(--red); }
+.price-down { color: var(--green); }
+.price-neutral { color: var(--text2); }
+
+/* Signal badges */
+.badge {
+  display: inline-block; padding: 2px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 700;
+}
+.badge-buy { background: rgba(239,68,68,.15); color: var(--red); }
+.badge-sell { background: rgba(34,197,94,.15); color: var(--green); }
+.badge-hold { background: rgba(59,130,246,.15); color: var(--blue); }
+.badge-watch { background: rgba(245,158,11,.15); color: var(--yellow); }
+.badge-wait { background: rgba(139,143,163,.15); color: var(--text2); }
+
+/* Momentum bar */
+.momentum-bar {
+  height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; min-width: 60px;
+}
+.momentum-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+.momentum-fill.positive { background: linear-gradient(90deg, var(--red), var(--red)); }
+.momentum-fill.negative { background: linear-gradient(90deg, var(--green), var(--green)); }
+
+/* Chart container */
+.chart-wrapper { position: relative; width: 100%; height: 400px; }
+
+/* ETF selector for chart */
+.etf-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.etf-chip {
+  padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text2); cursor: pointer;
+  font-size: 12px; font-weight: 500; transition: all .2s;
+}
+.etf-chip:hover { border-color: var(--text2); color: var(--text); }
+.etf-chip.active { border-color: var(--blue); color: var(--blue); background: rgba(59,130,246,.1); }
+
+/* Grid */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+/* Stat */
+.stat-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.stat-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+/* Loading */
+.loading {
+  text-align: center; padding: 40px; color: var(--text2);
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--blue); border-radius: 50%; animation: spin .8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Disclaimer */
+.disclaimer {
+  text-align: center; padding: 24px; color: var(--text2); font-size: 11px;
+  border-top: 1px solid var(--border); margin-top: 40px; max-width: 1400px;
+  margin-left: auto; margin-right: auto;
+}
+
+/* Warning banner */
+.warning-banner {
+  background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.2);
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px;
+  font-size: 13px; color: var(--yellow); display: flex; align-items: center; gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .main-content { padding: 12px; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>ETF 智投分析面板</h1>
+  </div>
+  <div class="header-right">
+    <span id="marketBadge" class="market-badge">—</span>
+    <span class="last-update" id="lastUpdate">等待数据...</span>
+    <button class="refresh-btn" onclick="refreshAll()" id="refreshBtn">刷新数据</button>
+  </div>
+</header>
+
+<div class="main-content">
+
+  <div id="warningBanner" class="warning-banner" style="display:none">
+    <span>⚠️</span> 数据延迟或有部分缺失，信号仅供参考。
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('overview')">概览</button>
+    <button class="tab-btn" onclick="switchTab('rotation')">动量轮动</button>
+    <button class="tab-btn" onclick="switchTab('trend')">均线趋势</button>
+    <button class="tab-btn" onclick="switchTab('dca')">定投增强</button>
+    <button class="tab-btn" onclick="switchTab('chart')">K线图表</button>
+  </div>
+
+  <!-- Tab: Overview -->
+  <div id="panel-overview" class="tab-panel active">
+    <div class="grid-3" id="overviewStats"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">ETF 实时行情</div>
+          <div class="card-subtitle">共 15 只 ETF，数据来源 AKShare（免费）</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto" id="quotesTable"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Rotation -->
+  <div id="panel-rotation" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">ETF 动量轮动排名</div>
+          <div class="card-subtitle">3个月 + 6个月收益率各 50% 权重 | 取前 5 名</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto" id="rotationTable"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Trend -->
+  <div id="panel-trend" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">双均线趋势信号</div>
+          <div class="card-subtitle">MA20 vs MA60 交叉信号 | 金叉/死叉/持有/观望</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto" id="trendTable"></div>
+    </div>
+  </div>
+
+  <!-- Tab: DCA -->
+  <div id="panel-dca" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">定投增强信号</div>
+          <div class="card-subtitle">基于价格 vs MA60 的动态定投 | 默认定投额 ¥5,000</div>
+        </div>
+        <div>
+          <input type="number" id="dcaAmount" value="5000" min="100" max="100000" step="100"
+                 style="padding:6px 12px; border-radius:8px; background:var(--surface2); color:var(--text); border:1px solid var(--border); width:100px;"
+                 onchange="refreshDCA()">
+          <span style="font-size:12px;color:var(--text2);margin-left:4px;">元/次</span>
+        </div>
+      </div>
+      <div style="overflow-x:auto" id="dcaTable"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Chart -->
+  <div id="panel-chart" class="tab-panel">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">K线走势 & 均线</div>
+          <div class="card-subtitle" id="chartSubtitle">选择 ETF 查看走势</div>
+        </div>
+      </div>
+      <div class="etf-selector" id="etfChips"></div>
+      <div class="chart-wrapper"><canvas id="klineChart"></canvas></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="disclaimer">
+  <strong>⚠️ 免责声明：</strong>本页面仅展示客观量化信号（动量得分、均线交叉、定投增强），不构成任何投资建议。
+  所有数据来源于 AKShare（免费开源数据接口），可能存在延迟或错误。
+  投资有风险，入市需谨慎。基于历史数据的信号不代表未来表现。
+</div>
+
+<script>
+// ── State ──
+const API = '/api';
+let dashboardData = null;
+let klineChart = null;
+let selectedChartETF = null;
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => refreshAll());
+
+async function refreshAll() {
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '刷新中...';
+  document.getElementById('warningBanner').style.display = 'none';
+
+  try {
+    const resp = await fetch(`${API}/dashboard`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    dashboardData = await resp.json();
+    document.getElementById('lastUpdate').textContent = '更新于 ' + dashboardData.timestamp;
+    renderAll();
+  } catch (e) {
+    document.getElementById('warningBanner').style.display = 'flex';
+    document.getElementById('warningBanner').innerHTML =
+      '<span>⚠️</span> 数据加载失败，请确认后端已启动（python run.py）。错误：' + e.message;
+    document.getElementById('lastUpdate').textContent = '加载失败';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '刷新数据';
+  }
+}
+
+// ── Render ──
+function renderAll() {
+  renderMarketState();
+  renderOverviewStats();
+  renderQuotesTable();
+  renderRotation();
+  renderTrend();
+  renderDCA();
+  renderChartSelector();
+  if (selectedChartETF) loadChart(selectedChartETF);
+}
+
+// Market state badge
+function renderMarketState() {
+  const badge = document.getElementById('marketBadge');
+  const ms = dashboardData.market_state;
+  if (!ms) { badge.textContent = '—'; badge.className = 'market-badge'; return; }
+  badge.textContent = ms.state_cn + ' (' + ms.diff_pct + '%)';
+  badge.className = 'market-badge ' + ms.state;
+}
+
+// Overview stats
+function renderOverviewStats() {
+  const quotes = dashboardData.quotes || [];
+  const up = quotes.filter(q => q.change_pct > 0).length;
+  const down = quotes.filter(q => q.change_pct < 0).length;
+
+  const maSigs = dashboardData.ma_signals || [];
+  const buySigs = maSigs.filter(s => s.direction === 'buy').length;
+  const sellSigs = maSigs.filter(s => s.direction === 'sell').length;
+
+  const ms = dashboardData.market_state;
+  const marketStateCn = ms ? ms.state_cn : '—';
+
+  document.getElementById('overviewStats').innerHTML = `
+    <div class="card">
+      <div class="stat-value" style="color:var(--red)">${up}</div>
+      <div class="stat-label">上涨 ETF 数</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--green)">${down}</div>
+      <div class="stat-label">下跌 ETF 数</div>
+    </div>
+    <div class="card">
+      <div class="stat-value">${marketStateCn}</div>
+      <div class="stat-label">当前市场状态（沪深300）</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--red)">${buySigs}</div>
+      <div class="stat-label">金叉买入信号</div>
+    </div>
+    <div class="card">
+      <div class="stat-value" style="color:var(--green)">${sellSigs}</div>
+      <div class="stat-label">死叉卖出信号</div>
+    </div>
+    <div class="card">
+      <div class="stat-value">${dashboardData.rotation?.length || 0}</div>
+      <div class="stat-label">动量轮动 Top N</div>
+    </div>
+  `;
+}
+
+// Quotes table
+function renderQuotesTable() {
+  const quotes = dashboardData.quotes || [];
+  if (!quotes.length) {
+    document.getElementById('quotesTable').innerHTML = '<div class="loading">暂无行情数据</div>';
+    return;
+  }
+
+  const rows = quotes.map((q, i) => {
+    const changeClass = q.change_pct > 0 ? 'price-up' : (q.change_pct < 0 ? 'price-down' : 'price-neutral');
+    const changeSign = q.change_pct > 0 ? '+' : '';
+    return `<tr>
+      <td>${i + 1}</td>
+      <td>${q.code}</td>
+      <td><strong>${q.name}</strong></td>
+      <td>${q.price?.toFixed(3) || '—'}</td>
+      <td class="${changeClass}">${changeSign}${q.change_pct?.toFixed(2) || '—'}%</td>
+      <td>${q.high?.toFixed(3) || '—'}</td>
+      <td>${q.low?.toFixed(3) || '—'}</td>
+      <td>${fmtVolume(q.volume)}</td>
+      <td>${fmtAmount(q.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('quotesTable').innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>代码</th><th>名称</th><th>最新价</th><th>涨跌幅</th>
+      <th>最高</th><th>最低</th><th>成交量</th><th>成交额</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// Rotation ranking
+function renderRotation() {
+  const ranking = dashboardData.rotation || [];
+  if (!ranking.length) {
+    document.getElementById('rotationTable').innerHTML = '<div class="loading">暂无动量数据，请确保后端已启动</div>';
+    return;
+  }
+
+  const maxScore = Math.max(...ranking.map(r => Math.abs(r.momentum_score)), 1);
+  const rows = ranking.map((r, i) => {
+    const barWidth = Math.min(Math.abs(r.momentum_score) / maxScore * 100, 100);
+    const barClass = r.momentum_score >= 0 ? 'positive' : 'negative';
+    const color = r.momentum_score >= 0 ? 'var(--red)' : 'var(--green)';
+    const sign = r.momentum_score >= 0 ? '+' : '';
+    return `<tr>
+      <td><strong>#${i + 1}</strong></td>
+      <td>${r.code}</td>
+      <td><strong>${r.name}</strong></td>
+      <td style="color:var(--text2)">${r.category}</td>
+      <td class="${r.momentum_score >= 0 ? 'price-up' : 'price-down'}">${sign}${r.momentum_score}%</td>
+      <td>${r.ret_1m != null ? (r.ret_1m >= 0 ? '+' : '') + r.ret_1m + '%' : '—'}</td>
+      <td>${r.ret_3m != null ? (r.ret_3m >= 0 ? '+' : '') + r.ret_3m + '%' : '—'}</td>
+      <td>${r.ret_6m != null ? (r.ret_6m >= 0 ? '+' : '') + r.ret_6m + '%' : '—'}</td>
+      <td>
+        <div class="momentum-bar">
+          <div class="momentum-fill ${barClass}" style="width:${barWidth}%;background:${color}"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rotationTable').innerHTML = `<table>
+    <thead><tr>
+      <th>排名</th><th>代码</th><th>名称</th><th>类别</th><th>动量得分</th>
+      <th>1月收益</th><th>3月收益</th><th>6月收益</th><th>动量条</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// MA trend signals
+function renderTrend() {
+  const signals = dashboardData.ma_signals || [];
+  if (!signals.length) {
+    document.getElementById('trendTable').innerHTML = '<div class="loading">暂无均线数据</div>';
+    return;
+  }
+
+  // Sort: buy first, then hold, watch, sell, wait
+  const order = { buy: 0, hold: 1, watch: 2, wait: 3, sell: 4 };
+  signals.sort((a, b) => (order[a.direction] || 5) - (order[b.direction] || 5));
+
+  const rows = signals.map(s => {
+    const badgeClass = 'badge-' + s.direction;
+    const maColor = s.ma_diff_pct > 0 ? 'var(--red)' : 'var(--green)';
+    const maSign = s.ma_diff_pct > 0 ? '+' : '';
+    return `<tr>
+      <td>${s.code}</td>
+      <td><strong>${s.name}</strong></td>
+      <td style="color:var(--text2)">${s.category}</td>
+      <td>${s.price}</td>
+      <td>${s.ma20}</td>
+      <td>${s.ma60}</td>
+      <td style="color:${maColor}">${maSign}${s.ma_diff_pct}%</td>
+      <td>${s.vol_ratio?.toFixed(1) || '—'}x</td>
+      <td><span class="badge ${badgeClass}">${s.signal_cn}</span></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('trendTable').innerHTML = `<table>
+    <thead><tr>
+      <th>代码</th><th>名称</th><th>类别</th><th>价格</th><th>MA20</th><th>MA60</th>
+      <th>差值</th><th>量比</th><th>信号</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// DCA signals
+function renderDCA() {
+  const signals = dashboardData.dca_signals || [];
+  if (!signals.length) {
+    document.getElementById('dcaTable').innerHTML = '<div class="loading">暂无定投数据</div>';
+    return;
+  }
+
+  const rows = signals.map(s => {
+    const color = s.action === 'double_down' ? 'var(--red)' :
+                  s.action === 'skip' ? 'var(--green)' :
+                  s.action === 'reduce' ? 'var(--yellow)' : 'var(--text)';
+    return `<tr>
+      <td>${s.code}</td>
+      <td><strong>${s.name}</strong></td>
+      <td>${s.price}</td>
+      <td>${s.ma60}</td>
+      <td>${(s.ratio * 100).toFixed(1)}%</td>
+      <td style="color:${color};font-weight:700">${s.action_cn}</td>
+      <td>${s.multiplier}x</td>
+      <td style="font-weight:700">¥${s.invest_amount.toFixed(0)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dcaTable').innerHTML = `<table>
+    <thead><tr>
+      <th>代码</th><th>名称</th><th>价格</th><th>MA60</th><th>比率</th>
+      <th>操作</th><th>倍率</th><th>定投金额</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Chart ──
+function renderChartSelector() {
+  const pool = dashboardData.quotes || [];
+  const chips = pool.map(q => {
+    const active = selectedChartETF === q.code ? ' active' : '';
+    return `<button class="etf-chip${active}" onclick="selectETF('${q.code}')">${q.name} (${q.code})</button>`;
+  }).join('');
+  document.getElementById('etfChips').innerHTML = chips;
+}
+
+async function selectETF(code) {
+  selectedChartETF = code;
+  // Update chips
+  document.querySelectorAll('.etf-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent.includes(code));
+  });
+
+  const pool = dashboardData.quotes || [];
+  const etf = pool.find(q => q.code === code);
+  document.getElementById('chartSubtitle').textContent = etf ? `${etf.name} (${code})` : code;
+
+  await loadChart(code);
+}
+
+async function loadChart(code) {
+  try {
+    const resp = await fetch(`${API}/etf/kline/${code}?days=200`);
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+
+    const dates = data.dates;
+    const close = data.close;
+    const ma20 = data.ma20;
+    const ma60 = data.ma60;
+    const volume = data.volume;
+    const colors = close.map((v, i) => i === 0 ? '#888' : v >= close[i-1] ? '#ef4444' : '#22c55e');
+
+    if (klineChart) klineChart.destroy();
+
+    const ctx = document.getElementById('klineChart').getContext('2d');
+    klineChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [
+          {
+            label: '收盘价',
+            data: close,
+            borderColor: '#e1e4ed',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0,
+            yAxisID: 'y',
+          },
+          {
+            label: 'MA20',
+            data: ma20,
+            borderColor: '#f59e0b',
+            borderWidth: 1.2,
+            pointRadius: 0,
+            tension: 0,
+            yAxisID: 'y',
+          },
+          {
+            label: 'MA60',
+            data: ma60,
+            borderColor: '#a855f7',
+            borderWidth: 1.2,
+            pointRadius: 0,
+            tension: 0,
+            yAxisID: 'y',
+          },
+          {
+            label: '成交量',
+            data: volume,
+            type: 'bar',
+            backgroundColor: colors.map(c => c + '33'),
+            borderColor: colors,
+            borderWidth: 0.5,
+            yAxisID: 'y1',
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { labels: { color: '#8b8fa3', usePointStyle: true, padding: 20 } },
+          tooltip: {
+            backgroundColor: '#1a1d28',
+            titleColor: '#e1e4ed',
+            bodyColor: '#8b8fa3',
+            borderColor: '#2a2d3a',
+            borderWidth: 1,
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#8b8fa3', maxTicksLimit: 12, font: { size: 10 } },
+            grid: { color: '#2a2d3a33' }
+          },
+          y: {
+            position: 'right',
+            ticks: { color: '#8b8fa3', font: { size: 10 }, callback: v => v.toFixed(2) },
+            grid: { color: '#2a2d3a33' }
+          },
+          y1: {
+            position: 'left',
+            ticks: { color: '#8b8fa3', font: { size: 10 }, callback: v => v > 1e6 ? (v/1e6).toFixed(0)+'M' : (v/1e3).toFixed(0)+'K' },
+            grid: { display: false },
+            max: Math.max(...volume) * 4,
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Chart error:', e);
+  }
+}
+
+async function refreshDCA() {
+  const amount = parseFloat(document.getElementById('dcaAmount').value) || 5000;
+  try {
+    const resp = await fetch(`${API}/signals/dca?amount=${amount}`);
+    const data = await resp.json();
+    dashboardData.dca_signals = data.signals;
+    renderDCA();
+  } catch (e) {
+    console.error('DCA refresh error:', e);
+  }
+}
+
+// ── Tabs ──
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+  document.querySelector(`.tab-btn[onclick*="${name}"]`).classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+
+  if (name === 'chart' && !selectedChartETF) {
+    const quotes = dashboardData.quotes || [];
+    if (quotes.length) selectETF(quotes[0].code);
+  }
+}
+
+// ── Helpers ──
+function fmtVolume(v) {
+  if (!v) return '—';
+  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿';
+  if (v >= 1e4) return (v / 1e4).toFixed(1) + '万';
+  return v.toFixed(0);
+}
+function fmtAmount(a) {
+  if (!a) return '—';
+  if (a >= 1e8) return (a / 1e8).toFixed(2) + '亿';
+  if (a >= 1e4) return (a / 1e4).toFixed(1) + '万';
+  return a.toFixed(0);
+}
+</script>
+</body>
+</html>
