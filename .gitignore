@@ -24,3 +24,6 @@ Thumbs.db
 # Temp
 *.log
 tmp/
+
+# Generated report data (the report.html is the deliverable)
+frontend/report_data.json

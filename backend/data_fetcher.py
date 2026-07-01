@@ -39,7 +39,12 @@ SINA_KLINE_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.p
 
 def _sina_code(etf: dict) -> str:
     """Get Sina-style code (sh510300 / sz159915)."""
-    return etf.get("sina_code", f"sh{etf['code']}")
+    if "sina_code" in etf:
+        return etf["sina_code"]
+    code = etf["code"]
+    # sz ETFs: codes starting with 15, 16, 18, 30
+    prefix = "sz" if code.startswith(("15", "16", "18", "30")) else "sh"
+    return f"{prefix}{code}"
 
 
 # ── Real-time Quotes (AKShare) ───────────────────────────────────────
