@@ -376,6 +376,402 @@ class BacktestEngine:
         }
 
 
+# ── Fast Backtest from price_history DB ───────────────────────────────────────
+
+def run_backtest_from_db(
+    start_date: str = None,
+    end_date: str = None,
+    benchmark_code: str = "510300",
+) -> dict:
+    """
+    高效回测：从 price_history 表读取数据，无需实时拉 Sina。
+    每天计算信号 + 模拟交易，输出完整指标。
+    """
+    import pandas as pd
+    from backtest_store import (
+        get_all_dates, get_prices_for_date,
+        save_signals_batch, save_snapshot, init_schema,
+    )
+
+    # ── 1. 加载日期列表 ──
+    all_dates = get_all_dates()
+    if not all_dates:
+        return {"error": "price_history 为空，请先运行 --backfill"}
+
+    # 过滤到回测区间
+    if start_date:
+        all_dates = [d for d in all_dates if d >= start_date]
+    if end_date:
+        all_dates = [d for d in all_dates if d <= end_date]
+
+    if len(all_dates) < 30:
+        return {"error": f"回测区间仅 {len(all_dates)} 天，需要至少 30 天"}
+
+    print(f"\n📊 回测区间: {all_dates[0]} → {all_dates[-1]} ({len(all_dates)} 交易日)")
+
+    # ── 2. 预加载所有价格数据 ──
+    # price_series: {code: {date: row}}  方便快速查询
+    from backtest_store import get_price_series, init_price_history_schema
+    init_price_history_schema()
+
+    from data_engine import ASSET_POOL
+    price_series: dict[str, dict[str, dict]] = {}
+    for etf in ASSET_POOL:
+        code = etf["code"]
+        rows = get_price_series(code)
+        price_series[code] = {r["date"]: r for r in rows}
+
+    bench_rows = price_series.get(benchmark_code, {})
+
+    # ── 3. 回测主循环 ──
+    cash = INITIAL_CASH
+    # positions: {code: {"shares": int, "avg_cost": float}}
+    positions: dict[str, dict] = {}
+
+    equity_curve: list[float] = []
+    bench_curve: list[float] = []
+    trades_log: list[dict] = []
+    regimes_log: list[dict] = []
+
+    bench_base: float | None = None
+
+    for i, date in enumerate(all_dates):
+        # 收集当日的所有ETF价格
+        prices_today: dict[str, dict] = {}
+        for code in price_series:
+            if date in price_series[code]:
+                prices_today[code] = price_series[code][date]
+
+        if len(prices_today) < 10:
+            # 数据不足，跳过
+            equity_curve.append(equity_curve[-1] if equity_curve else cash)
+            continue
+
+        # 构建 assets 列表（用于 signal_engine）
+        assets = []
+        for code, row in prices_today.items():
+            close = row.get("close")
+            if close is None:
+                continue
+            etf = next((e for e in ASSET_POOL if e["code"] == code), None)
+            if not etf:
+                continue
+
+            # 仓位市值
+            pos = positions.get(code)
+            unrealized = 0.0
+            if pos:
+                unrealized = (close - pos["avg_cost"]) * pos["shares"]
+
+            assets.append({
+                "code": code,
+                "name": etf.get("name", code),
+                "group": etf.get("group", "other"),
+                "price": float(close),
+                "ma5": float(row["ma5"]) if row.get("ma5") else None,
+                "ma20": float(row["ma20"]) if row.get("ma20") else None,
+                "ma60": float(row["ma60"]) if row.get("ma60") else None,
+                "ma120": float(row["ma120"]) if row.get("ma120") else None,
+                "macd": float(row["macd"]) if row.get("macd") else 0.0,
+                "rsi": float(row["rsi"]) if row.get("rsi") else 50.0,
+                "volatility": 0.15,   # 历史波动率已在ma60窗口隐含
+                "max_drawdown": 0.0,
+                "vol_ratio": 1.0,
+                "vol_expanding": False,
+                "up_streak": 0,
+                "unrealized": unrealized,
+            })
+
+        if len(assets) < 10:
+            equity_curve.append(equity_curve[-1] if equity_curve else cash)
+            continue
+
+        # ── 评分 ──
+        scored = []
+        for a in assets:
+            try:
+                s = rate_scores(a)
+                if s:
+                    scored.append(s)
+            except Exception:
+                continue
+
+        if not scored:
+            equity_curve.append(equity_curve[-1] if equity_curve else cash)
+            continue
+
+        # ── 市场状态 ──
+        macro = {"price": assets[0]["price"] if assets else 1}
+        try:
+            regime = detect_regime(scored, macro)
+        except Exception:
+            regime = {"regime": "rotation", "equity_allocation": 0.6}
+
+        # ── 排序 + 决策 ──
+        try:
+            ranked = rank_assets(scored)
+        except Exception:
+            ranked = sorted(scored, key=lambda x: x.get("final_score", 0), reverse=True)
+            for i2, r in enumerate(ranked):
+                r["tier"] = "core" if i2 < 3 else "watch" if i2 < 8 else "reduce"
+
+        # ── 计算总市值（含持仓）──
+        total_value = cash + sum(
+            positions.get(a["code"], {}).get("shares", 0) * a["price"]
+            for a in assets if a["code"] in positions
+        )
+
+        equity_alloc = regime.get("equity_allocation", 0.6)
+        target_equity = total_value * equity_alloc
+        min_cash = total_value * MIN_CASH_PCT
+        daily_chg_limit = total_value * MAX_DAILY_CHANGE
+
+        # ── 执行交易（冻结规则）──
+        price_map = {a["code"]: a["price"] for a in assets}
+
+        # BUY: core 标的（top ranked）
+        core = [r for r in ranked if r.get("tier") in ("core", "watch")][:6]
+        for a in core:
+            code = a["code"]
+            price = price_map.get(code)
+            if not price or code in positions:
+                continue
+            # 目标仓位：equity 部分均分
+            target_val = target_equity / len(core) if core else 0
+            invest = min(target_val, daily_chg_limit, cash - min_cash)
+            if invest < price * 100:
+                continue
+            shares = int(invest / price / 100) * 100
+            cost = shares * price
+            if shares >= 100 and cost <= cash:
+                positions[code] = {"name": a.get("name", code), "shares": shares, "avg_cost": price}
+                cash -= cost
+                trades_log.append({
+                    "date": date, "code": code, "name": a.get("name", code),
+                    "action": "BUY", "price": price, "shares": shares,
+                    "amount": cost, "tier": a.get("tier"), "score": a.get("final_score"),
+                })
+
+        # REDUCE: bottom ranked
+        reduce_list = [r for r in ranked if r.get("tier") == "reduce"][:3]
+        for a in reduce_list:
+            code = a["code"]
+            if code not in positions:
+                continue
+            pos = positions[code]
+            price = price_map.get(code)
+            if not price:
+                continue
+            sell_shares = int(pos["shares"] * 0.5 / 100) * 100
+            if sell_shares < 100:
+                # < 100股 → 清仓
+                proceeds = pos["shares"] * price
+                cash += proceeds
+                trades_log.append({
+                    "date": date, "code": code, "name": pos["name"],
+                    "action": "REDUCE", "price": price,
+                    "shares": pos["shares"], "amount": proceeds,
+                    "tier": "reduce", "score": a.get("final_score"),
+                })
+                del positions[code]
+            else:
+                proceeds = sell_shares * price
+                pos["shares"] -= sell_shares
+                cash += proceeds
+                trades_log.append({
+                    "date": date, "code": code, "name": pos["name"],
+                    "action": "REDUCE", "price": price,
+                    "shares": sell_shares, "amount": proceeds,
+                    "tier": "reduce", "score": a.get("final_score"),
+                })
+
+        # ── 记录快照 ──
+        pos_value = sum(p["shares"] * price_map.get(code, p["avg_cost"]) for code, p in positions.items())
+        daily_value = cash + pos_value
+        equity_curve.append(daily_value)
+
+        # 基准曲线
+        if benchmark_code in prices_today:
+            bm_close = float(prices_today[benchmark_code]["close"])
+            if bench_base is None:
+                bench_base = bm_close
+            bench_curve.append(bm_close / bench_base)
+
+        # 保存快照
+        snap = {
+            "cash": round(cash, 2),
+            "positions_value": round(pos_value, 2),
+            "total_value": round(daily_value, 2),
+            "daily_pnl": 0,
+            "daily_pnl_pct": 0,
+            "total_pnl_pct": round((daily_value / INITIAL_CASH - 1) * 100, 2),
+            "position_count": len(positions),
+        }
+        save_snapshot(date, snap, regime)
+        regimes_log.append({"date": date, "regime": regime})
+
+        # 进度
+        if (i + 1) % 100 == 0:
+            pct = (i + 1) / len(all_dates) * 100
+            print(f"   进度 {pct:.0f}% ({i+1}/{len(all_dates)} 天) ...")
+
+    # ── 4. 计算统计指标 ──
+    curve = np.array(equity_curve)
+    returns = np.diff(curve) / curve[:-1] if len(curve) > 1 else np.array([])
+
+    total_return = float((curve[-1] / curve[0] - 1) * 100) if curve[-1] > 0 else 0
+    peak = np.maximum.accumulate(curve)
+    dd = (curve - peak) / peak * 100
+    max_dd = float(dd.min())
+    years = len(curve) / 252
+    cagr = float((curve[-1] / curve[0]) ** (1 / max(years, 0.01)) - 1) * 100
+    ann_vol = float(np.std(returns) * math.sqrt(252) * 100) if len(returns) > 0 else 0
+
+    excess = returns  # rf=0
+    sharpe = float(np.mean(excess) / np.std(excess) * math.sqrt(252)) if np.std(excess) > 1e-9 else 0
+    downside = returns[returns < 0]
+    sortino = float(np.mean(excess) / np.std(downside) * math.sqrt(252)) if len(downside) > 1 else 0
+
+    win_rate = float(np.sum(returns > 0) / max(len(returns), 1) * 100)
+    bm_ret = float((bench_curve[-1] / bench_curve[0] - 1) * 100) if len(bench_curve) > 1 else 0
+
+    # Save benchmark curve
+    from backtest_store import save_benchmark
+    for i, date in enumerate(all_dates):
+        if benchmark_code in price_series and date in price_series[benchmark_code]:
+            save_benchmark(date, benchmark_code, float(price_series[benchmark_code][date]["close"]))
+
+    # Regime summary
+    from collections import Counter
+    regime_counts = Counter(r["regime"].get("regime", "rotation") for r in regimes_log)
+
+    stats = {
+        "start_date": all_dates[0],
+        "end_date": all_dates[-1],
+        "trading_days": len(curve),
+        "initial_value": float(curve[0]),
+        "final_value": float(curve[-1]),
+        "total_return_pct": round(total_return, 2),
+        "cagr_pct": round(cagr, 2),
+        "max_drawdown_pct": round(max_dd, 2),
+        "sharpe_ratio": round(sharpe, 2),
+        "sortino_ratio": round(sortino, 2),
+        "annual_volatility_pct": round(ann_vol, 2),
+        "win_rate_pct": round(win_rate, 1),
+        "benchmark_return_pct": round(bm_ret, 2),
+        "alpha_pct": round(total_return - bm_ret, 2),
+        "total_trades": len(trades_log),
+        "position_days": sum(1 for v in equity_curve if v > cash),
+        "regime_distribution": dict(regime_counts),
+        "equity_curve": [round(v, 2) for v in equity_curve],
+    }
+
+    return stats
+
+
+# ── CLI wrapper for run_backtest ───────────────────────────────────────────────
+
+def run_backtest() -> dict:
+    """CLI entry point: auto-detect date range from price_history."""
+    from backtest_store import get_all_dates, get_price_record_count
+    dates = get_all_dates()
+    n = get_price_record_count()
+    if n == 0:
+        return {"error": "数据库为空，请先运行: python main_lite.py --backfill"}
+    if len(dates) < 30:
+        return {"error": f"仅 {len(dates)} 个交易日，需要至少 30 天"}
+    # Use full available range
+    return run_backtest_from_db(start_date=dates[0], end_date=dates[-1])
+
+
+def format_backtest_report(stats: dict) -> str:
+    if "error" in stats:
+        return f"❌ {stats['error']}"
+    reg_dist = stats.get("regime_distribution", {})
+    reg_str = " | ".join(f"{k}:{v}天" for k, v in reg_dist.items())
+    return f"""
+  📊 回测报告  {stats['start_date']} → {stats['end_date']}
+  ─────────────────────────────────────────
+  总收益率    {stats['total_return_pct']:+.2f}%
+  年化收益    {stats['cagr_pct']:+.2f}%   (CAGR)
+  基准收益    {stats['benchmark_return_pct']:+.2f}%   (沪深300)
+  Alpha      {stats['alpha_pct']:+.2f}%
+  ─────────────────────────────────────────
+  最大回撤    {stats['max_drawdown_pct']:.2f}%
+  年化波动    {stats['annual_volatility_pct']:.2f}%
+  Sharpe     {stats['sharpe_ratio']:.2f}
+  Sortino    {stats['sortino_ratio']:.2f}
+  胜率        {stats['win_rate_pct']:.1f}%
+  ─────────────────────────────────────────
+  交易次数    {stats['total_trades']}
+  持仓天数    {stats['position_days']} / {stats['trading_days']}
+  市场状态    {reg_str or 'N/A'}
+  ─────────────────────────────────────────
+  初始资金    ¥{stats['initial_value']:,.0f}
+  最终资金    ¥{stats['final_value']:,.0f}
+"""
+
+
+def run_walkforward() -> dict:
+    """Run walk-forward from price_history DB."""
+    from backtest_store import get_all_dates
+    dates = get_all_dates()
+    if len(dates) < 300:
+        return {"error": f"Walk-Forward 需要至少 300 天数据，当前 {len(dates)} 天"}
+
+    total_start = dates[0]
+    total_end = dates[-1]
+
+    # Windows: 2yr train / 3m test / 1m step
+    wf = WalkForwardEngine(total_start, total_end, train_days=504, test_days=63, step_days=21)
+    result = wf.run()
+
+    # Compute summary
+    windows_data = wf.results
+    if not windows_data:
+        return {"error": "无有效窗口", "windows": []}
+
+    test_rets = [w["test_return_pct"] for w in windows_data]
+    stable = sum(1 for r in test_rets if r > 0)
+    consistency = (stable / len(windows_data)) * 10 if windows_data else 0
+    overfit = "LOW" if consistency >= 7 else "MEDIUM" if consistency >= 5 else "HIGH"
+
+    result.update({
+        "consistency_score": round(consistency, 1),
+        "stable_periods": stable,
+        "overfit_risk": overfit,
+        "avg_test_return_pct": round(sum(test_rets) / len(test_rets), 2),
+    })
+    return result
+
+
+def format_wf_report(wf_result: dict) -> str:
+    if "error" in wf_result:
+        return f"❌ {wf_result['error']}"
+    windows = wf_result.get("windows", [])
+    if not windows:
+        return "❌ 无有效窗口"
+    avg = wf_result.get("avg_test_return_pct", 0)
+    stable = wf_result.get("stable_periods", 0)
+    consistency = wf_result.get("consistency_score", 0)
+    overfit = wf_result.get("overfit_risk", "N/A")
+    return f"""
+  📊 Walk-Forward 验证  ({len(windows)} 个窗口)
+  ─────────────────────────────────────────
+  一致性评分  {consistency:.1f} / 10
+  稳定周期    {stable}/{len(windows)}
+  过拟合风险  {overfit}
+  ─────────────────────────────────────────
+  各窗口结果:
+""" + "\n".join(
+        f"  [{w['test_start']}→{w['test_end']}] "
+        f"Train:{w['train_return_pct']:+.1f}% "
+        f"Test:{w['test_return_pct']:+.1f}% "
+        f"Alpha:{w['test_alpha_pct']:+.1f}%"
+        for w in windows
+    )
+
+
 # ── Walk-Forward Engine ────────────────────────────────────────────────────────
 
 class WalkForwardEngine:
@@ -402,7 +798,7 @@ class WalkForwardEngine:
         self.overall: Optional[dict] = None
 
     def run(self) -> dict:
-        """Run full walk-forward analysis."""
+        """Run full walk-forward analysis using price_history DB."""
         d = datetime.strptime(self.total_start, "%Y-%m-%d")
         end = datetime.strptime(self.total_end, "%Y-%m-%d")
         train_end = d + timedelta(days=self.train_days)
@@ -417,13 +813,11 @@ class WalkForwardEngine:
             test_start_str = train_end.strftime("%Y-%m-%d")
             test_end_str = test_end.strftime("%Y-%m-%d")
 
-            # Train: backtest on train window
-            be_train = BacktestEngine(train_start_str, train_end_str)
-            train_stats = be_train.run()
+            # Train: backtest on train window (use DB-backed version)
+            train_stats = run_backtest_from_db(train_start_str, train_end_str)
 
             # Test: backtest on test window
-            be_test = BacktestEngine(test_start_str, test_end_str)
-            test_stats = be_test.run()
+            test_stats = run_backtest_from_db(test_start_str, test_end_str)
 
             if "error" not in train_stats and "error" not in test_stats:
                 windows += 1
@@ -436,8 +830,9 @@ class WalkForwardEngine:
                     "train_end": train_end_str,
                     "test_start": test_start_str,
                     "test_end": test_end_str,
-                    "train_return": train_stats.get("total_return_pct"),
-                    "test_return": test_stats.get("total_return_pct"),
+                    "train_return_pct": train_stats.get("total_return_pct", 0),
+                    "test_return_pct": test_stats.get("total_return_pct", 0),
+                    "test_alpha_pct": test_stats.get("alpha_pct", 0),
                     "train_sharpe": train_stats.get("sharpe_ratio"),
                     "test_sharpe": test_stats.get("sharpe_ratio"),
                     "test_max_dd": test_stats.get("max_drawdown_pct"),
@@ -466,7 +861,7 @@ class WalkForwardEngine:
                        "MEDIUM" if overfit_score >= windows * 0.3 else "LOW"
 
         avg_test_return = round(
-            sum(r["test_return"] for r in self.results) / len(self.results), 2
+            sum(r["test_return_pct"] for r in self.results) / len(self.results), 2
         )
         avg_test_sharpe = round(
             sum(r["test_sharpe"] for r in self.results) / len(self.results), 2

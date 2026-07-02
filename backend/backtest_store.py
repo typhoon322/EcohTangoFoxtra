@@ -276,6 +276,124 @@ def get_trades(start_date: str = None, end_date: str = None) -> list[dict]:
         return [dict(zip(cols, r)) for r in rows]
 
 
+# ── Price History ──────────────────────────────────────────────────────────────
+
+def init_price_history_schema() -> None:
+    """Create the price_history table for backfill."""
+    with _conn() as c:
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS price_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                date        TEXT NOT NULL,
+                code        TEXT NOT NULL,
+                name        TEXT,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                volume      REAL,
+                ma5         REAL,
+                ma20        REAL,
+                ma60        REAL,
+                ma120       REAL,
+                macd        REAL,
+                macd_signal REAL,
+                macd_hist   REAL,
+                rsi         REAL,
+                UNIQUE(date, code)
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS ix_ph_date ON price_history(date)")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_ph_code ON price_history(code)")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_ph_date_code ON price_history(date, code)")
+
+
+def save_price_row(row: dict) -> None:
+    """Save one daily OHLCV + indicators row."""
+    init_price_history_schema()
+    with _conn() as c:
+        c.execute("""
+            INSERT OR REPLACE INTO price_history
+            (date, code, name, open, high, low, close, volume,
+             ma5, ma20, ma60, ma120, macd, macd_signal, macd_hist, rsi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            row["date"], row["code"], row.get("name"),
+            row.get("open"), row.get("high"), row.get("low"), row.get("close"),
+            row.get("volume"),
+            row.get("ma5"), row.get("ma20"), row.get("ma60"), row.get("ma120"),
+            row.get("macd"), row.get("macd_signal"), row.get("macd_hist"),
+            row.get("rsi"),
+        ))
+
+
+def save_price_batch(rows: list[dict]) -> None:
+    """Batch save price rows."""
+    if not rows:
+        return
+    init_price_history_schema()
+    with _conn() as c:
+        c.executemany("""
+            INSERT OR REPLACE INTO price_history
+            (date, code, name, open, high, low, close, volume,
+             ma5, ma20, ma60, ma120, macd, macd_signal, macd_hist, rsi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (
+                r["date"], r["code"], r.get("name"),
+                r.get("open"), r.get("high"), r.get("low"), r.get("close"),
+                r.get("volume"),
+                r.get("ma5"), r.get("ma20"), r.get("ma60"), r.get("ma120"),
+                r.get("macd"), r.get("macd_signal"), r.get("macd_hist"),
+                r.get("rsi"),
+            )
+            for r in rows
+        ])
+
+
+def get_price_series(code: str) -> list[dict]:
+    """Get full price series for one ETF, oldest first."""
+    init_price_history_schema()
+    with _conn() as c:
+        cur = c.execute(
+            "SELECT * FROM price_history WHERE code = ? ORDER BY date",
+            (code,)
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, r)) for r in rows]
+
+
+def get_prices_for_date(date: str) -> dict[str, dict]:
+    """Get all ETF prices for a given date, keyed by code."""
+    init_price_history_schema()
+    with _conn() as c:
+        cur = c.execute(
+            "SELECT * FROM price_history WHERE date = ?",
+            (date,)
+        )
+        rows = cur.fetchall()
+        cols = [d[0] for d in cur.description]
+        return {r[2]: dict(zip(cols, r)) for r in rows}  # index by code
+
+
+def get_all_dates() -> list[str]:
+    """Get all dates that have price data, sorted."""
+    init_price_history_schema()
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT DISTINCT date FROM price_history ORDER BY date"
+        ).fetchall()
+        return [r[0] for r in rows]
+
+
+def get_price_record_count() -> int:
+    """Count total price_history rows."""
+    init_price_history_schema()
+    with _conn() as c:
+        return c.execute("SELECT COUNT(*) FROM price_history").fetchone()[0]
+
+
 # ── Benchmark helpers ───────────────────────────────────────────────────────────
 
 def save_benchmark(date: str, code: str, price: float) -> None:

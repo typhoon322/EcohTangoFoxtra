@@ -404,6 +404,7 @@ def main() -> None:
     parser.add_argument("--report", action="store_true", help="生成静态网页")
     parser.add_argument("--all", action="store_true", help="执行全部")
     parser.add_argument("--reset", action="store_true", help="重置模拟账户")
+    parser.add_argument("--backfill", action="store_true", help="回填历史 K 线数据（一次性）")
     parser.add_argument("--evaluate", action="store_true", help="策略评估 + 信号漂移检测")
     parser.add_argument("--backtest", action="store_true", help="历史回测")
     parser.add_argument("--walkforward", action="store_true", help="Walk-Forward 滚动验证")
@@ -413,6 +414,15 @@ def main() -> None:
         from paper_trading import reset_account
         result = reset_account()
         print(f"✅ 模拟账户已重置，初始资金 ¥{result['initial_cash']:,.0f}")
+        return
+
+    # ── v3.2: Backfill historical data ────────────────────────────────────────
+    if args.backfill:
+        from backend.backfill_engine import backfill_all
+        result = backfill_all()
+        print(f"\n回填完成: {result['total_rows']} 条记录, "
+              f"日期范围: {result['date_range']}, "
+              f"失败: {result['failed'] or '无'}")
         return
 
     # ── v3.2: Evaluation mode ────────────────────────────────────────────────
@@ -430,8 +440,14 @@ def main() -> None:
 
     # ── v3.2: Backtest mode ───────────────────────────────────────────────────
     if args.backtest:
-        from backend.backtest_engine import run_backtest, format_backtest_report
-        stats = run_backtest()
+        from backend.backtest_engine import run_backtest_from_db, format_backtest_report
+        from backend.backtest_store import get_all_dates, get_price_record_count
+        dates = get_all_dates()
+        n = get_price_record_count()
+        if n == 0:
+            print("❌ 数据库为空，请先运行: python main_lite.py --backfill")
+            return
+        stats = run_backtest_from_db(start_date=dates[0], end_date=dates[-1])
         print()
         print("════════════════════════════════════════════")
         print(format_backtest_report(stats))
@@ -441,6 +457,11 @@ def main() -> None:
     # ── v3.2: Walk-Forward mode ──────────────────────────────────────────────
     if args.walkforward:
         from backend.backtest_engine import run_walkforward, format_wf_report
+        from backend.backtest_store import get_all_dates
+        dates = get_all_dates()
+        if len(dates) < 300:
+            print(f"❌ Walk-Forward 需要至少 300 天数据，当前 {len(dates)} 天")
+            return
         wf = run_walkforward()
         print()
         print("════════════════════════════════════════════")

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>回测报告 — EcohTangoFoxtra</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e2e8f0;padding:24px}
+  h1{font-size:1.5rem;font-weight:700;margin-bottom:4px}
+  .subtitle{color:#94a3b8;font-size:.85rem;margin-bottom:24px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px}
+  .card{background:#1a1d27;border-radius:12px;padding:20px;border:1px solid #2d3142}
+  .card h2{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:#94a3b8;margin-bottom:12px}
+  .big{font-size:2rem;font-weight:700;color:#f1f5f9}
+  .positive{color:#34d399}
+  .negative{color:#f87171}
+  .neutral{color:#fbbf24}
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .metric{background:#13151f;border-radius:8px;padding:12px}
+  .metric .label{font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+  .metric .value{font-size:1.2rem;font-weight:600}
+  .chart-card{grid-column:1/-1;background:#1a1d27;border-radius:12px;padding:20px;border:1px solid #2d3142}
+  .chart-wrap{position:relative;height:300px}
+  .regime-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:12px 0}
+  .regime-bar div{transition:width .3s}
+  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600;margin-right:8px}
+  .badge-green{background:#064e3b;color:#34d399}
+  .badge-yellow{background:#451a03;color:#fbbf24}
+  .badge-red{background:#450a0a;color:#f87171}
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #2d3142;font-size:.85rem}
+  th{color:#64748b;font-weight:500;text-transform:uppercase;font-size:.7rem;letter-spacing:.06em}
+  .tag{padding:2px 6px;border-radius:4px;font-size:.7rem}
+  .tag-buy{background:#064e3b;color:#34d399}
+  .tag-hold{background:#1e3a5f;color:#60a5fa}
+  .tag-reduce{background:#450a0a;color:#f87171}
+</style>
+</head>
+<body>
+
+<h1>📊 ETF 量化系统 — 历史回测报告</h1>
+<p class="subtitle">2023-06-09 → 2026-07-02 &nbsp;|&nbsp; 741 交易日 &nbsp;|&nbsp; 初始 ¥100,000 → 最终 ¥130,243</p>
+
+<div class="grid">
+  <div class="card">
+    <h2>总收益率</h2>
+    <div class="big positive">+30.24%</div>
+  </div>
+  <div class="card">
+    <h2>年化收益 (CAGR)</h2>
+    <div class="big positive">+9.40%</div>
+  </div>
+  <div class="card">
+    <h2>Alpha（超额收益）</h2>
+    <div class="big positive">+5.66%</div>
+  </div>
+  <div class="card">
+    <h2>基准（沪深300）</h2>
+    <div class="big neutral">+24.58%</div>
+  </div>
+  <div class="card">
+    <h2>最大回撤</h2>
+    <div class="big negative">-14.13%</div>
+  </div>
+  <div class="card">
+    <h2>Sharpe 比率</h2>
+    <div class="big neutral">0.71</div>
+  </div>
+  <div class="card">
+    <h2>Sortino 比率</h2>
+    <div class="big neutral">0.96</div>
+  </div>
+  <div class="card">
+    <h2>胜率</h2>
+    <div class="big neutral">47.2%</div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>风险指标</h2>
+    <div class="metrics">
+      <div class="metric">
+        <div class="label">年化波动率</div>
+        <div class="value">14.01%</div>
+      </div>
+      <div class="metric">
+        <div class="label">最大回撤</div>
+        <div class="value negative">-14.13%</div>
+      </div>
+      <div class="metric">
+        <div class="label">总交易次数</div>
+        <div class="value">819</div>
+      </div>
+      <div class="metric">
+        <div class="label">持仓天数</div>
+        <div class="value">741/741</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>市场状态分布</h2>
+    <div class="regime-bar">
+      <div style="width:23.8%;background:#34d399" title="主升 176天"></div>
+      <div style="width:58.2%;background:#fbbf24" title="轮动 431天"></div>
+      <div style="width:0.0%;background:#f87171" title="防守 0天"></div>
+    </div>
+    <div style="font-size:.8rem;color:#64748b;margin-top:8px">
+      <span class="badge badge-green">主升 176天</span>
+      <span class="badge badge-yellow">轮动 431天</span>
+      <span class="badge badge-red">防守 0天</span>
+    </div>
+  </div>
+</div>
+
+<div class="chart-card">
+  <h2>📈 权益曲线 vs 沪深300基准</h2>
+  <div class="chart-wrap">
+    <canvas id="equityChart"></canvas>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <h2>📋 评估结论</h2>
+  <table>
+    <tr>
+      <th>维度</th><th>指标</th><th>得分</th><th>评价</th>
+    </tr>
+    <tr>
+      <td>收益质量</td><td>Alpha +5.7% vs 基准</td>
+      <td>8.0/10</td>
+      <td><span class="tag tag-buy">优秀</span></td>
+    </tr>
+    <tr>
+      <td>稳定性</td><td>Sharpe 0.71</td>
+      <td>7.0/10</td>
+      <td><span class="tag tag-buy">良好</span></td>
+    </tr>
+    <tr>
+      <td>回撤控制</td><td>最大回撤 -14.1%</td>
+      <td>5.0/10</td>
+      <td><span class="tag tag-hold">良好</span></td>
+    </tr>
+    <tr>
+      <td>策略一致性</td><td>Walk-Forward 一致性 6.9/10</td>
+      <td>6.9/10</td>
+      <td><span class="tag tag-hold">中等 — 建议持续观察</span></td>
+    </tr>
+  </table>
+  <p style="margin-top:12px;font-size:.85rem;color:#94a3b8">
+    ⚠️ 回测结果仅供参考，过去业绩不代表未来表现。策略在轮动市场中表现最佳。
+  </p>
+</div>
+
+<script>
+const labels = ["2023-06-09", "2023-06-16", "2023-06-27", "2023-07-04", "2023-07-11", "2023-07-18", "2023-07-25", "2023-08-01", "2023-08-08", "2023-08-15", "2023-08-22", "2023-08-29", "2023-09-05", "2023-09-12", "2023-09-19", "2023-09-26", "2023-10-11", "2023-10-18", "2023-10-25", "2023-11-01", "2023-11-08", "2023-11-15", "2023-11-22", "2023-11-29", "2023-12-06", "2023-12-13", "2023-12-20", "2023-12-27", "2024-01-04", "2024-01-11", "2024-01-18", "2024-01-25", "2024-02-01", "2024-02-08", "2024-02-23", "2024-03-01", "2024-03-08", "2024-03-15", "2024-03-22", "2024-03-29", "2024-04-09", "2024-04-16", "2024-04-23", "2024-04-30", "2024-05-10", "2024-05-17", "2024-05-24", "2024-05-31", "2024-06-07", "2024-06-17", "2024-06-24", "2024-07-01", "2024-07-08", "2024-07-15", "2024-07-22", "2024-07-29", "2024-08-05", "2024-08-12", "2024-08-19", "2024-08-26", "2024-09-02", "2024-09-09", "2024-09-18", "2024-09-25", "2024-10-09", "2024-10-16", "2024-10-23", "2024-10-30", "2024-11-06", "2024-11-13", "2024-11-20", "2024-11-27", "2024-12-04", "2024-12-11", "2024-12-18", "2024-12-25", "2025-01-02", "2025-01-09", "2025-01-16", "2025-01-23", "2025-02-07", "2025-02-14", "2025-02-21", "2025-02-28", "2025-03-07", "2025-03-14", "2025-03-21", "2025-03-28", "2025-04-07", "2025-04-14", "2025-04-21", "2025-04-28", "2025-05-08", "2025-05-15", "2025-05-22", "2025-05-29", "2025-06-06", "2025-06-13", "2025-06-20", "2025-06-27", "2025-07-04", "2025-07-11", "2025-07-18", "2025-07-25", "2025-08-01", "2025-08-08", "2025-08-15", "2025-08-22", "2025-08-29", "2025-09-05", "2025-09-12", "2025-09-19", "2025-09-26", "2025-10-13", "2025-10-20", "2025-10-27", "2025-11-03", "2025-11-10", "2025-11-17", "2025-11-24", "2025-12-01", "2025-12-08", "2025-12-15", "2025-12-22", "2025-12-29", "2026-01-07", "2026-01-14", "2026-01-21", "2026-01-28", "2026-02-04", "2026-02-11", "2026-02-26", "2026-03-05", "2026-03-12", "2026-03-19", "2026-03-26", "2026-04-02", "2026-04-10", "2026-04-17", "2026-04-24", "2026-05-06", "2026-05-13", "2026-05-20", "2026-05-27", "2026-06-03", "2026-06-10", "2026-06-17", "2026-06-25", "2026-07-02"];  // every 5th date
+const equityData = [100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 100000.0, 99571.9, 99195.2, 98222.3, 97309.8, 97227.3, 95683.0, 96167.1, 97530.9, 98224.5, 96642.9, 96151.5, 95305.3, 96456.2, 94875.8, 94238.1, 93404.9, 92945.9, 92565.5, 93346.3, 90613.8, 92500.6, 94146.0, 94534.6, 95134.7, 94718.7, 94402.6, 93646.2, 93950.6, 93289.7, 93530.8, 95233.9, 96853.4, 97843.1, 96168.2, 95480.8, 94700.4, 95178.6, 93340.8, 93061.4, 91767.5, 93818.7, 93842.2, 91287.0, 88205.4, 88470.2, 89075.0, 87699.9, 87114.5, 86157.2, 86341.4, 89830.8, 101880.1, 98976.2, 100887.9, 100725.0, 102829.8, 104664.5, 101339.3, 99972.4, 100823.1, 102621.4, 101001.7, 101004.8, 98043.8, 97418.6, 97812.5, 97540.4, 100648.8, 102378.6, 105780.1, 102598.2, 104000.7, 104637.6, 102683.4, 102494.6, 96457.3, 100148.4, 99960.1, 100399.2, 101060.6, 100998.4, 101134.9, 101715.2, 102141.9, 102995.6, 101839.6, 104221.7, 106144.3, 107292.0, 109508.8, 110847.2, 110868.1, 111667.2, 116685.4, 121847.5, 127429.1, 125257.4, 129686.0, 131143.8, 133261.1, 132501.5, 130274.3, 137181.2, 134128.1, 134363.6, 131013.1, 126729.7, 128732.5, 128445.5, 127712.9, 128529.4, 129116.6, 130926.3, 133455.6, 132973.7, 134259.7, 133008.3, 132683.2, 132350.4, 129547.8, 131189.7, 127972.9, 125953.7, 125346.5, 127024.4, 129670.4, 130080.1, 132213.6, 134379.1, 132773.2, 134402.8, 134449.2, 128885.8, 133922.3, 133837.8, 130243.2];
+const bmData = [0.0, 3.51, 0.65, 2.34, 1.72, 1.93, 3.67, 5.78, 5.31, 1.95, -0.55, 0.39, 1.27, -0.31, -1.27, -1.98, -2.84, -4.34, -7.15, -5.25, -4.29, -4.4, -6.06, -7.44, -9.91, -10.64, -12.36, -11.42, -11.21, -12.59, -14.98, -13.24, -16.29, -12.54, -9.52, -8.17, -8.09, -7.36, -7.93, -8.27, -8.35, -8.77, -8.98, -6.4, -4.84, -4.37, -6.3, -6.82, -6.97, -7.8, -8.98, -8.92, -10.67, -8.27, -7.1, -10.15, -11.34, -11.84, -11.06, -11.71, -13.32, -15.17, -15.76, -9.63, 4.63, 1.61, 5.49, 3.3, 6.95, 9.13, 5.83, 3.72, 4.42, 6.01, 4.68, 5.93, 1.69, 0.57, 1.07, 1.38, 3.75, 4.94, 6.01, 3.9, 5.07, 6.82, 4.32, 4.27, -3.88, 0.1, 0.81, 0.83, 2.76, 4.34, 4.5, 3.17, 3.69, 3.54, 0.88, 3.1, 4.89, 6.11, 7.49, 9.34, 7.52, 8.82, 11.73, 16.52, 19.69, 18.47, 20.21, 19.77, 20.99, 22.06, 20.71, 25.55, 23.91, 25.05, 22.53, 18.55, 21.93, 23.1, 21.41, 23.05, 23.91, 27.5, 26.59, 23.05, 22.92, 22.45, 22.87, 23.18, 21.07, 22.11, 19.64, 16.75, 16.78, 20.76, 23.28, 24.4, 27.16, 30.52, 26.72, 28.3, 29.16, 24.45, 28.98, 31.32, 26.17];
+
+const chart = new Chart(document.getElementById('equityChart'), {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: '策略权益',
+        data: equityData,
+        borderColor: '#34d399',
+        backgroundColor: 'rgba(52,211,153,0.1)',
+        fill: true,
+        tension: 0.2,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      },
+      {
+        label: '沪深300基准',
+        data: bmData,
+        borderColor: '#60a5fa',
+        backgroundColor: 'transparent',
+        fill: false,
+        tension: 0.2,
+        borderWidth: 1.5,
+        borderDash: [4,4],
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 12 } } },
+      tooltip: { backgroundColor: '#1a1d27', titleColor: '#e2e8f0', bodyColor: '#94a3b8', borderColor: '#2d3142', borderWidth: 1,
+        callbacks: {
+          label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y >= 0 ? '+' : ''}${ctx.parsed.y.toFixed(2)}%`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: '#2d3142' }, ticks: { color: '#64748b', maxTicksLimit: 10 } },
+      y: { grid: { color: '#2d3142' }, ticks: { color: '#64748b' }, title: { display: true, text: '累计收益率 %', color: '#64748b' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
