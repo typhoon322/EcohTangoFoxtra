@@ -1,5 +1,5 @@
 """
-模拟盘引擎 — EcohTangoFoxtra v3-lite
+模拟盘引擎 — EcohTangoFoxtra v3.1（封版核心）
 纯本地计算，零 token 消耗
 
 功能：
@@ -7,6 +7,11 @@
   - 每日根据决策卡执行模拟买卖
   - 跟踪持仓、成本价、市值、P&L
   - 输出每日账户快照
+
+🔒 封版规则（DO NOT MODIFY）:
+  - 单标的最大仓位：25%
+  - 单日变动上限：10%
+  - 最低现金：10%
 """
 
 import json
@@ -15,7 +20,12 @@ from datetime import datetime
 from typing import Optional
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), "paper_state.json")
-INITIAL_CASH = 100_000.0  # 初始模拟资金
+INITIAL_CASH = 100_000.0
+
+# ── 🔒 Frozen v3.1 Rules (DO NOT MODIFY) ─────────────────────────────────────
+MAX_POSITION_PCT = 0.25    # 单标的最大仓位：25%
+MAX_DAILY_CHANGE = 0.10   # 单日变动上限：10%
+MIN_CASH_PCT = 0.10        # 最低现金：10%
 
 
 def _load_state() -> dict:
@@ -112,18 +122,18 @@ def execute_decisions(
     total_value: Optional[float] = None,
 ) -> dict:
     """
-    根据每日决策执行模拟交易。
+    根据每日决策执行模拟交易（v3.1 封版规则）。
 
     decisions: [{code, name, action, target_weight}]
                action: BUY | HOLD | REDUCE
                target_weight: 0.0–1.0 (相对于总资产的目标仓位)
     prices: {code: current_price}
 
-    策略：
-      - 每只 ETF 的目标市值 = total_value × target_weight
-      - BUY → 买入到目标市值（每次最多用 20% 现金，分批建仓）
-      - HOLD → 不操作
-      - REDUCE → 卖出 50% 持仓
+    🔒 Frozen v3.1 Rules:
+      - 单标的最大仓位：25% of total_value
+      - 单日变动上限：10% of total_value (single-day net change cap)
+      - 最低现金：10% of total_value
+      - 整手买入（100股/手）
     """
     if total_value is None:
         total_value = get_total_value(prices)
@@ -134,7 +144,17 @@ def execute_decisions(
     trade_log = []
     cash = state["cash"]
 
-    # 先更新持仓价格并计算浮动盈亏
+    # Max single position value
+    max_position = total_value * MAX_POSITION_PCT
+    # Max single-day net change (cash + positions)
+    max_daily_change = total_value * MAX_DAILY_CHANGE
+    # Minimum cash to preserve
+    min_cash = total_value * MIN_CASH_PCT
+
+    # Track total value change this run to enforce daily cap
+    start_total = total_value
+
+    # Pre-compute current positions
     for code in state["positions"]:
         p = state["positions"][code]
         prev_price = p.get("current_price", p["avg_cost"])
@@ -142,7 +162,6 @@ def execute_decisions(
         p["current_price"] = curr_price
         p["unrealized"] = (curr_price - p["avg_cost"]) * p["shares"]
 
-    # 执行决策
     for dec in decisions:
         code = dec["code"]
         name = dec["name"]
@@ -154,67 +173,88 @@ def execute_decisions(
             continue
 
         pos = state["positions"].get(code)
-        target_value = total_value * target_weight
-        max_invest = cash * 0.15  # 单次最多投入 15% 现金
+        current_pos_value = (pos["shares"] * price) if pos else 0.0
 
         if action == "BUY":
-            # 目标：达到 target_weight
-            if pos is None:
-                # 新建仓：最多投入 min(target_value, max_invest)
-                invest = min(target_value, max_invest, cash)
-                shares = int(invest / price / 100) * 100  # 整手
+            # Target value for this position
+            target_value = min(total_value * target_weight, max_position)
+            gap = target_value - current_pos_value
+
+            if gap <= 0:
+                continue  # Already at or above target
+
+            # Apply single-day change cap
+            gap = min(gap, max_daily_change)
+            # Can't spend below min_cash
+            available = max(0, cash - min_cash)
+            invest = min(gap, available)
+            shares = int(invest / price / 100) * 100  # 整手
+
+            if shares >= 100:
                 cost = shares * price
-                if shares > 0 and cost <= cash:
-                    state["positions"][code] = {
-                        "name": name,
-                        "shares": shares,
-                        "avg_cost": price,
-                        "current_price": price,
-                        "unrealized": 0.0,
-                    }
+                # New total position value check
+                new_pos_value = current_pos_value + cost
+                if new_pos_value > max_position:
+                    # Cap at max position
+                    allowed = max_position - current_pos_value
+                    shares = int(allowed / price / 100) * 100
+                    cost = shares * price
+
+                if shares >= 100 and cost <= cash:
+                    if pos is None:
+                        state["positions"][code] = {
+                            "name": name,
+                            "shares": shares,
+                            "avg_cost": price,
+                            "current_price": price,
+                            "unrealized": 0.0,
+                        }
+                    else:
+                        total_shares = pos["shares"] + shares
+                        total_cost = pos["shares"] * pos["avg_cost"] + cost
+                        pos["shares"] = total_shares
+                        pos["avg_cost"] = total_cost / total_shares
+                        pos["current_price"] = price
                     cash -= cost
-                    trade_log.append(f"BUY {name} {shares}股 @{price} = ¥{cost:.2f}")
-            else:
-                # 加仓
-                current_value = pos["shares"] * price
-                gap = target_value - current_value
-                invest = min(gap, max_invest, cash)
-                shares = int(invest / price / 100) * 100
-                cost = shares * price
-                if shares > 0 and cost <= cash:
-                    total_shares = pos["shares"] + shares
-                    total_cost = pos["shares"] * pos["avg_cost"] + cost
-                    pos["shares"] = total_shares
-                    pos["avg_cost"] = total_cost / total_shares
-                    pos["current_price"] = price
-                    cash -= cost
-                    trade_log.append(f"ADD {name} +{shares}股 @{price} = ¥{cost:.2f}")
+                    trade_log.append(
+                        f"BUY {name} +{shares}股 @{price:.3f} = ¥{cost:.2f}"
+                    )
 
         elif action == "REDUCE" and pos:
-            # 减仓 50%
-            sell_shares = int(pos["shares"] * 0.5 / 100) * 100
+            # Sell 50% — or full exit if profit > 5%
+            if pos["current_price"] > pos["avg_cost"] * 1.05:
+                # Take profit: sell all
+                sell_shares = pos["shares"]
+            else:
+                sell_shares = int(pos["shares"] * 0.5 / 100) * 100
+
             sell_shares = max(sell_shares, 0)
             if sell_shares >= 100:
                 proceeds = sell_shares * price
-                avg_cost_reduce = sell_shares * pos["avg_cost"]
                 pos["shares"] -= sell_shares
                 pos["current_price"] = price
                 if pos["shares"] == 0:
                     del state["positions"][code]
                 cash += proceeds
-                trade_log.append(f"REDUCE {name} -{sell_shares}股 @{price} = +¥{proceeds:.2f}")
-            elif pos["shares"] > 0 and pos["current_price"] > pos["avg_cost"] * 1.05:
-                # 盈利超 5%，清仓
-                proceeds = pos["shares"] * price
-                trade_log.append(f"EXIT {name} -{pos['shares']}股 @{price} = +¥{proceeds:.2f}")
-                cash += proceeds
-                del state["positions"][code]
+                trade_log.append(
+                    f"REDUCE {name} -{sell_shares}股 @{price:.3f} = +¥{proceeds:.2f}"
+                )
 
-    # 记录快照
-    pos_value = sum(p["shares"] * p["current_price"] for p in state["positions"].values())
+    # ── Compute snapshot ────────────────────────────────────────────────────
+    pos_value = sum(
+        p["shares"] * p["current_price"]
+        for p in state["positions"].values()
+    )
     new_total = cash + pos_value
-    daily_pnl = new_total - total_value
-    daily_pnl_pct = daily_pnl / total_value * 100 if total_value > 0 else 0
+    daily_pnl = new_total - start_total
+    daily_pnl_pct = daily_pnl / start_total * 100 if start_total > 0 else 0
+
+    # Enforce daily change cap
+    if abs(daily_pnl) > max_daily_change:
+        scale = max_daily_change / abs(daily_pnl)
+        adjustment = daily_pnl * (1 - scale)
+        cash -= adjustment
+        new_total = cash + pos_value
 
     state["cash"] = round(cash, 2)
     state["daily_pnl"] = round(daily_pnl, 2)
@@ -231,7 +271,6 @@ def execute_decisions(
         "position_count": len(state["positions"]),
     }
     state["history"].append(snapshot)
-    # 只保留最近 90 天历史
     if len(state["history"]) > 90:
         state["history"] = state["history"][-90:]
 
@@ -272,20 +311,31 @@ def format_snapshot_text(snapshot: dict, prices: dict) -> str:
 
 
 def format_positions_text(prices: dict) -> str:
-    """生成持仓明细文字。"""
+    """生成持仓明细文字（含权重）。"""
     state = _load_state()
     if not state["positions"]:
         return "📦 空仓"
 
+    total_value = get_total_value(prices)
+
+    # Sort by value descending
+    sorted_pos = sorted(
+        state["positions"].items(),
+        key=lambda x: x[1]["shares"] * x[1]["current_price"],
+        reverse=True,
+    )
+
     lines = ["", "📦 当前持仓:"]
-    for code, p in sorted(state["positions"].items(), key=lambda x: x[1]["shares"] * x[1]["current_price"], reverse=True):
+    for code, p in sorted_pos:
         curr = prices.get(code, p["current_price"])
         value = p["shares"] * curr
+        weight = value / total_value if total_value > 0 else 0
         pnl = (curr - p["avg_cost"]) / p["avg_cost"] * 100
         marker = "🟢" if pnl >= 0 else "🔴"
         lines.append(
             f"{marker} {p['name'][:6]} {p['shares']}股"
             f" 成本¥{p['avg_cost']:.3f} 现¥{curr:.3f}"
             f" {'+' if pnl >= 0 else ''}{pnl:.1f}%"
+            f" | 权重{weight:.0%}"
         )
     return "\n".join(lines)

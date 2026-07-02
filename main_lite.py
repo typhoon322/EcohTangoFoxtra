@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """
-main_lite.py — EcohTangoFoxtra v3-lite
-========================================
+main_lite.py — EcohTangoFoxtra v3.1 + v3.2（封版核心）
+=================================================================
 极简管线：数据 → 打分 → 排序 → 决策 → 模拟盘 → 飞书
+
+🔒 封版核心（冻结，不允许修改）:
+  - backend/data_engine.py      L1 数据层
+  - backend/signal_engine.py    L2 信号评分
+  - backend/market_regime.py    L3 市场状态
+  - backend/rotation_engine.py  L4 轮动分析
+  - backend/portfolio_engine.py  L5 组合决策
+  - backend/paper_trading.py    模拟盘引擎
+  - backend/backtest_engine.py  回测引擎
+  - backend/strategy_evaluation.py 策略评估
+
+✅ 唯一允许修改的层: frontend/ + docs/ (UI/展示层)
 
 用法:
   python main_lite.py                # 仅运行管线（打印摘要）
   python main_lite.py --feishu       # + 发送到飞书
   python main_lite.py --paper         # + 执行模拟盘交易
-  python main_lite.py --report       # + 生成静态网页
+  python main_lite.py --report        # + 生成静态网页
   python main_lite.py --all          # 全部执行
-  python main_lite.py --reset        # 重置模拟账户
+  python main_lite.py --reset         # 重置模拟账户
+  python main_lite.py --evaluate      # v3.2 策略评估 + 信号漂移检测
+  python main_lite.py --backtest      # v3.2 历史回测
+  python main_lite.py --walkforward   # v3.2 Walk-Forward 滚动验证
 
 所有计算在本地完成，飞书只接收最终决策卡（约 300–500 字）。
 """
@@ -383,18 +398,54 @@ def _print_summary(
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="EcohTangoFoxtra v3-lite")
+    parser = argparse.ArgumentParser(description="EcohTangoFoxtra v3.1")
     parser.add_argument("--feishu", action="store_true", help="发送飞书卡片")
     parser.add_argument("--paper", action="store_true", help="执行模拟盘交易")
     parser.add_argument("--report", action="store_true", help="生成静态网页")
     parser.add_argument("--all", action="store_true", help="执行全部")
     parser.add_argument("--reset", action="store_true", help="重置模拟账户")
+    parser.add_argument("--evaluate", action="store_true", help="策略评估 + 信号漂移检测")
+    parser.add_argument("--backtest", action="store_true", help="历史回测")
+    parser.add_argument("--walkforward", action="store_true", help="Walk-Forward 滚动验证")
     args = parser.parse_args()
 
     if args.reset:
         from paper_trading import reset_account
         result = reset_account()
         print(f"✅ 模拟账户已重置，初始资金 ¥{result['initial_cash']:,.0f}")
+        return
+
+    # ── v3.2: Evaluation mode ────────────────────────────────────────────────
+    if args.evaluate:
+        from backend.strategy_evaluation import (
+            full_evaluation, format_full_report,
+            format_score_card, format_drift_alert,
+        )
+        report = full_evaluation()
+        print()
+        print("════════════════════════════════════════════")
+        print(format_full_report(report))
+        print("════════════════════════════════════════════")
+        return
+
+    # ── v3.2: Backtest mode ───────────────────────────────────────────────────
+    if args.backtest:
+        from backend.backtest_engine import run_backtest, format_backtest_report
+        stats = run_backtest()
+        print()
+        print("════════════════════════════════════════════")
+        print(format_backtest_report(stats))
+        print("════════════════════════════════════════════")
+        return
+
+    # ── v3.2: Walk-Forward mode ──────────────────────────────────────────────
+    if args.walkforward:
+        from backend.backtest_engine import run_walkforward, format_wf_report
+        wf = run_walkforward()
+        print()
+        print("════════════════════════════════════════════")
+        print(format_wf_report(wf))
+        print("════════════════════════════════════════════")
         return
 
     feishu = args.feishu or args.all
