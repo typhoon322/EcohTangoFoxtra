@@ -161,5 +161,6 @@ def save_card_to_file(card_text: str, path: str = "docs/decision_card.md") -> st
 
 
 def get_feishu_webhook_url() -> str:
-    """Get Feishu webhook URL from env or default."""
-    return os.environ.get("FEISHU_WEBHOOK_URL", "")
+    """Get Feishu webhook URL from obfuscated config."""
+    from feishu_config import get_webhook_url
+    return get_webhook_url()

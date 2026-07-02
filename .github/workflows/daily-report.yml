@@ -61,7 +61,7 @@ jobs:
       - name: Run daily pipeline
         if: steps.skip.outputs.skip != 'true'
         env:
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          LARK_PUSH_CFG: ${{ secrets.LARK_PUSH_CFG }}
         run: python3 scripts/daily_run.py
 
       - name: Commit updated reports

@@ -14,6 +14,8 @@ import json
 import os
 from datetime import datetime
 
+from feishu_config import get_webhook_url, is_configured, keyword_footer, ensure_keyword, KEYWORD_TAG
+
 # ── 词表 ────────────────────────────────────────────────────────────────────
 
 _REGIME_CN = {
@@ -47,7 +49,7 @@ def build_lite_card(
 
     lines = []
     lines.append(f"📊 ETF决策卡 {now}")
-    lines.append(f"【{regime_word}】主线:{leading}")
+    lines.append(f"【{regime_word}】市场主线:{leading}")
     lines.append(f"仓位 {equity}%权益 / {defensive}%防御 / {100-equity-defensive}%现金")
     lines.append("")
 
@@ -86,7 +88,7 @@ def build_lite_card(
         )
 
     lines.append("")
-    lines.append("⚠️ 仅供参考，不构成投资建议")
+    lines.append(keyword_footer())
 
     return "\n".join(lines)
 
@@ -159,7 +161,7 @@ def build_lite_card_json(regime: dict, top_actions: list,
                     "text": {
                         "tag": "markdown",
                         "content": (
-                            f"**【{regime_key.upper()}】** 主线: {leading}\n"
+                            f"**【{regime_key.upper()}】** 市场主线: {leading}\n"
                             f"仓位: {equity}%权益 / {defensive}%防御 / {100-equity-defensive}%现金"
                         ),
                     },
@@ -171,7 +173,7 @@ def build_lite_card_json(regime: dict, top_actions: list,
                 },
                 {"tag": "hr"},
                 # Action header
-                {"tag": "markdown", "content": "**🎯 操作建议**"},
+                {"tag": "markdown", "content": "**🎯 操作建议 (score)**"},
                 # Action items
                 *([
                     {
@@ -192,7 +194,7 @@ def build_lite_card_json(regime: dict, top_actions: list,
                 {
                     "tag": "note",
                     "elements": [
-                        {"tag": "plain_text", "content": "⚠️ 本决策卡由量化模型自动生成，仅供参考，不构成投资建议"}
+                        {"tag": "plain_text", "content": keyword_footer()}
                     ],
                 },
             ],
@@ -202,6 +204,24 @@ def build_lite_card_json(regime: dict, top_actions: list,
 
 # ── 发送 ───────────────────────────────────────────────────────────────────
 
+def _post_feishu(payload: dict) -> dict:
+    """POST 到飞书（URL 从混淆配置解析，日志不输出 URL）。"""
+    webhook_url = get_webhook_url()
+    result = {"sent": False, "webhook_configured": is_configured()}
+    if not webhook_url:
+        return result
+    try:
+        import requests
+        r = requests.post(webhook_url, json=payload, timeout=10)
+        result["sent"] = r.status_code == 200
+        result["response"] = r.text[:100]
+        if not result["sent"]:
+            result["error"] = r.text[:200]
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
 def send_lite_card(
     regime: dict,
     top_actions: list,
@@ -210,29 +230,23 @@ def send_lite_card(
     paper_snapshot: dict = None,
 ) -> dict:
     """
-    发送极简卡片到飞书 webhook（如果已配置）。
+    发送极简卡片到飞书（如果已配置 LARK_PUSH_CFG）。
     返回发送结果和卡片文字。
     """
-    webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "")
     card_text = build_lite_card(
         regime, top_actions, rotation_arrows,
         portfolio_summary, paper_snapshot
     )
 
-    result = {"sent": False, "text": card_text, "webhook_configured": bool(webhook_url)}
+    result = {"sent": False, "text": card_text, "webhook_configured": is_configured()}
 
-    if webhook_url:
+    if is_configured():
         card_json = build_lite_card_json(
             regime, top_actions, rotation_arrows,
             portfolio_summary, paper_snapshot
         )
-        try:
-            import requests
-            r = requests.post(webhook_url, json=card_json, timeout=10)
-            result["sent"] = r.status_code == 200
-            result["response"] = r.text[:100]
-        except Exception as e:
-            result["error"] = str(e)
+        post = _post_feishu(card_json)
+        result.update(post)
 
     return result
 
@@ -303,7 +317,7 @@ def build_fund_card_json(report: dict) -> dict:
         "msg_type": "interactive",
         "card": {
             "header": {
-                "title": {"tag": "plain_text", "content": f"🏦 Daily Fund Report {now}"},
+                "title": {"tag": "plain_text", "content": f"🏦 市场 Fund Report {now}"},
                 "template": regime_color,
             },
             "elements": [
@@ -312,8 +326,8 @@ def build_fund_card_json(report: dict) -> dict:
                     "text": {
                         "tag": "markdown",
                         "content": (
-                            f"**Portfolio Risk**: {s.get('portfolio_risk_pct', 0):.1f}%\n"
-                            f"**Regime**: {regime}"
+                            f"**Portfolio Risk (score)**: {s.get('portfolio_risk_pct', 0):.1f}%\n"
+                            f"**Regime / 市场**: {regime}"
                         ),
                     },
                 },
@@ -333,7 +347,7 @@ def build_fund_card_json(report: dict) -> dict:
                 {
                     "tag": "note",
                     "elements": [
-                        {"tag": "plain_text", "content": "⚠️ 基金组合日报由量化模型自动生成，仅供参考，不构成投资建议"}
+                        {"tag": "plain_text", "content": keyword_footer()}
                     ],
                 },
             ],
@@ -342,19 +356,13 @@ def build_fund_card_json(report: dict) -> dict:
 
 
 def send_fund_card(report: dict) -> dict:
-    """发送基金日报到飞书 webhook。"""
-    webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "")
-    card_text = build_fund_card(report)
-    result = {"sent": False, "text": card_text, "webhook_configured": bool(webhook_url)}
+    """发送基金日报到飞书。"""
+    card_text = ensure_keyword(build_fund_card(report))
+    result = {"sent": False, "text": card_text, "webhook_configured": is_configured()}
 
-    if webhook_url:
-        try:
-            import requests
-            r = requests.post(webhook_url, json=build_fund_card_json(report), timeout=10)
-            result["sent"] = r.status_code == 200
-            result["response"] = r.text[:100]
-        except Exception as e:
-            result["error"] = str(e)
+    if is_configured():
+        post = _post_feishu(build_fund_card_json(report))
+        result.update(post)
     return result
 
 

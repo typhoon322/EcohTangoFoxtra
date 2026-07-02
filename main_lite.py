@@ -256,7 +256,7 @@ def step_feishu(
     elif result["webhook_configured"]:
         log(f"   ⚠️ 飞书发送失败: {result.get('response', result.get('error', 'unknown'))}")
     else:
-        log("   ℹ️ 未配置飞书 webhook（设置 FEISHU_WEBHOOK_URL 环境变量）")
+        log("   ℹ️ 未配置飞书推送（设置 .env 中 LARK_PUSH_CFG）")
     return result
 
 
@@ -506,7 +506,7 @@ def main() -> None:
             elif result["webhook_configured"]:
                 log(f"   ⚠️ 飞书发送失败: {result.get('error', result.get('response', ''))}")
             else:
-                log("   ℹ️ 未配置飞书 webhook")
+                log("   ℹ️ 未配置飞书推送")
         return
 
     # ── v3.3: Intelligence Report ─────────────────────────────────────────────
