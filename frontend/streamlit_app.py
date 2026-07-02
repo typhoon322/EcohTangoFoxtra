@@ -116,8 +116,8 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1: Strategy Intelligence
 # ═══════════════════════════════════════════════════════════════════════════════
-tab_intel, tab_fund, tab_health, tab_backtest, tab_signals = st.tabs(
-    ["🧠 Intelligence", "🏦 Fund", "🏥 健康评分", "📊 回测", "🎯 信号"]
+tab_intel, tab_fund, tab_health, tab_backtest, tab_signals, tab_portfolio = st.tabs(
+    ["🧠 Intelligence", "🏦 Fund", "🏥 健康评分", "📊 回测", "🎯 信号", "📝 持仓录入"]
 )
 
 with tab_intel:
@@ -602,6 +602,78 @@ with tab_signals:
 
     st.divider()
     st.caption("💡 信号数据由 `backend/signal_engine.py` 实时计算，缓存于 `backend/signal_cache.json`")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: 持仓录入
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_portfolio:
+    from backend.position_ledger import (
+        record_buy, record_sell, set_cash, list_positions, format_positions_table,
+    )
+    from backend.data_engine import ASSET_POOL
+
+    st.subheader("📝 我的持仓 / 交易录入")
+    st.caption("录入真实交易后，Fund 页的再平衡建议会与你的实际持仓对比")
+
+    pos_data = list_positions()
+    st.code(format_positions_table(pos_data), language=None)
+
+    col1, col2 = st.columns(2)
+
+    etf_options = {f"{a['name']} ({a['code']})": a for a in ASSET_POOL}
+
+    with col1:
+        st.markdown("**买入**")
+        buy_label = st.selectbox("标的", list(etf_options.keys()), key="buy_etf")
+        buy_shares = st.number_input("股数（100整数倍）", min_value=100, step=100, value=100, key="buy_sh")
+        buy_price = st.number_input("成交价", min_value=0.001, step=0.001, format="%.3f", key="buy_px")
+        if st.button("确认买入", type="primary", key="btn_buy"):
+            a = etf_options[buy_label]
+            try:
+                r = record_buy(a["code"], int(buy_shares), float(buy_price), name=a["name"])
+                st.success(f"买入成功，现金 ¥{r['cash']:,.2f}")
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+
+    with col2:
+        st.markdown("**卖出**")
+        held_codes = [p["code"] for p in pos_data.get("positions", [])]
+        if held_codes:
+            sell_options = {
+                f"{p['name']} ({p['code']})": p["code"]
+                for p in pos_data["positions"]
+            }
+            sell_label = st.selectbox("标的", list(sell_options.keys()), key="sell_etf")
+            sell_shares = st.number_input("股数", min_value=100, step=100, value=100, key="sell_sh")
+            sell_price = st.number_input("成交价 ", min_value=0.001, step=0.001, format="%.3f", key="sell_px")
+            if st.button("确认卖出", type="primary", key="btn_sell"):
+                code = sell_options[sell_label]
+                try:
+                    r = record_sell(code, int(sell_shares), float(sell_price))
+                    st.success(f"卖出成功，现金 ¥{r['cash']:,.2f}")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+        else:
+            st.info("当前无持仓可卖")
+
+    st.divider()
+    st.markdown("**现金对账**")
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        new_cash = st.number_input("设置现金余额 ¥", min_value=0.0, value=float(pos_data["cash"]), step=1000.0)
+    with c2:
+        st.write("")
+        st.write("")
+        if st.button("更新现金"):
+            set_cash(float(new_cash))
+            st.success("已更新")
+            st.rerun()
+
+    st.caption("CLI 同等入口: `python3 scripts/record_trade.py buy 510300 1000 4.85`")
+
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()

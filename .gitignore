@@ -32,6 +32,7 @@ frontend/report_data.json
 # Auto-generated simulation state
 backend/paper_state.json
 backend/fund_state.json
+backend/manual_trades.jsonl
 backend/backtest.db-shm
 backend/backtest.db-wal
 

@@ -464,6 +464,7 @@ EcohTangoFoxtra/
 ├── frontend/
 │   └── streamlit_app.py          ✅ v3.5 Streamlit Dashboard（含 /fund）
 ├── docs/
+│   ├── USER_GUIDE.md             ← 📖 使用说明书（日常必读）
 │   ├── index.html                ✅ GitHub Pages 入口
 │   ├── lite_card.md              ✅ 飞书决策卡
 │   ├── backtest_report.html      ✅ 回测可视化报告
