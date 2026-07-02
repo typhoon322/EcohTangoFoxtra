@@ -1,16 +1,23 @@
-# EcohTangoFoxtra v3.3 系统规格说明书（封版版）
+# EcohTangoFoxtra v3.6 Final 系统规格说明书（稳定化收敛版）
 
 > 📅 封版日期: 2026-07-02
-> 版本: v3.1 + v3.2 + v3.3
-> 状态: **FROZEN — 核心逻辑已冻结，唯一可修改层为 UI/展示层**
+> 版本: v3.1 + v3.2 + v3.3 + v3.4 + v3.5 + **v3.6 Final**
+> 状态: **FROZEN — 功能冻结，仅允许参数微调 / 稳定性抑制 / UI 展示**
 
 ---
 
 ## 🔒 封版声明
 
-从本版本起，**核心策略逻辑已完全冻结**。
-任何对以下模块的修改必须经过完整评审流程（issue → review → approval），
-除非是 bug fix。
+从本版本起，**核心策略逻辑 + 功能模块已完全冻结**。
+v3.6 Final 进入稳定化收敛模式：**不再新增功能/模块/策略/指标**。
+
+### v3.6 Final 收敛规则
+
+| ❌ 永久禁止 | ✅ 唯一允许 |
+|-----------|-----------|
+| 新策略 / 新指标 / 新模块 | 参数微调（threshold, risk multiplier, smoothing α, rebalance frequency） |
+| 新回测框架 / 新资产类别 | 稳定性抑制（降频、过滤、连亏保护、高波动减仓） |
+| 核心逻辑修改 | UI / 飞书 / Streamlit 展示 |
 
 ---
 
@@ -20,6 +27,14 @@
 ┌──────────────────────────────────────────────────────────┐
 │                   UI / 展示层                            │  ✅ 唯一可修改层
 │    docs/   frontend/streamlit_app.py   feishu_lite.py   │
+└──────────────────────────┬───────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────┐
+│         基金管理层（v3.4 + v3.5 + v3.6 Stability）       │  ✅ 仅参数微调
+│  risk_budget_engine  strategy_pool  strategy_weight_    │
+│  allocator  portfolio_constructor  risk_parity_engine   │
+│  rebalance_engine  fund_manager (稳定层编排)              │
+│  · 风险预算  · 多策略组合  · 风险平价  · 稳定抑制     │
 └──────────────────────────┬───────────────────────────────┘
                            │
 ┌──────────────────────────▼───────────────────────────────┐
@@ -104,6 +119,13 @@
 | `backend/drift_monitor.py` | v3.3：漂移检测参数（只读数据，不改核心） |
 | `backend/threshold_suggester.py` | v3.3：阈值建议参数（只输出建议，不改核心） |
 | `backend/strategy_health.py` | v3.3：评分维度权重（只读数据，不改核心） |
+| `backend/risk_budget_engine.py` | v3.4：风险预算参数（只读数据，不改核心） |
+| `backend/strategy_pool.py` | v3.5：策略池定义（元数据，不改信号） |
+| `backend/strategy_weight_allocator.py` | v3.5：策略权重分配参数 |
+| `backend/portfolio_constructor.py` | v3.5：组合构建参数 |
+| `backend/risk_parity_engine.py` | v3.5：风险平价参数 |
+| `backend/rebalance_engine.py` | v3.5：再平衡阈值 |
+| `backend/fund_manager.py` | v3.4+v3.5：编排层 |
 | `main_lite.py` | 新增命令行参数（仅添加，不修改已有逻辑调用） |
 
 > ⚠️ **v3.3 策略外挂层虽可调整参数，但不得修改核心策略逻辑。**
@@ -232,6 +254,107 @@ MIN_CASH_PCT = 0.10        # 最低现金 10%
 
 ---
 
+## 📊 v3.4 风险预算层（Risk Budget Engine）
+
+### 核心目标
+
+> 决定组合最多允许承担多少风险，而非"买什么"
+
+### 输入 / 输出
+
+```
+输入: portfolio volatility, drawdown trend, regime, strategy confidence
+输出: {total_risk_budget, regime_multiplier, max_single_asset_risk}
+```
+
+| 市场状态 | 风险预算 |
+|---------|---------|
+| Bull | 6–8% |
+| Sideways | 4–6% |
+| Bear | 2–3% |
+| HighVolatility | 3–4% |
+
+---
+
+## 📊 v3.5 组合构建层（Portfolio Construction）
+
+### Strategy Pool
+
+| 策略 | 资产 | 逻辑 |
+|------|------|------|
+| Trend Following | 510300, 513100 | 宽基 + 跨境趋势 |
+| Mean Reversion | 513050, 512690 | 跨境 + 消费回归 |
+| Momentum | 159915, 588000 | 创业板 + 科创动量 |
+
+### Strategy Weight Allocator
+
+```
+weight ∝ strategy_score × stability × regime_fit × recent 近期表现
+```
+
+### Portfolio Constructor
+
+```
+final_weight = strategy_weight × asset_hint × inverse_volatility × risk_budget_scale
+```
+
+### Risk Parity Layer
+
+```
+risk_contribution per asset ≈ equal
+```
+
+### Rebalance Engine
+
+```
+触发: 权重偏离 ≥5% (v3.6) / regime shift / 最短间隔 5 天
+输出: increase / reduce / hold 信号 + recommendation
+```
+
+---
+
+## 📊 v3.6 稳定层（Final — 降噪 + 长期运行）
+
+### 核心目标
+
+> 提高长期稳定性，而非追求短期收益
+
+### 稳定层机制（嵌入 fund_manager，无新模块）
+
+| 机制 | 参数 | 作用 |
+|------|------|------|
+| 低质量信号过滤 | min_strategy_score=45 | 抑制弱策略权重 |
+| 权重 EMA 平滑 | α=0.30 | 降低调仓频率 |
+| 再平衡节流 | min_rebalance_days=5, drift≥5% | 最多周频再平衡 |
+| 连亏保护 | 3天连亏 → ×0.85 | 自动缩减风险预算 |
+| 高波动减仓 | vol>1.8% → ×0.90 | 波动过高时降暴露 |
+
+### 预期效果
+
+| 指标 | v3.6 预期 |
+|------|----------|
+| 收益 | 略降或持平 |
+| 回撤 | 明显下降 |
+| Win rate | 上升 |
+| Sharpe | 上升（目标 >1） |
+| 交易频率 | 明显下降 |
+
+### 日常运营节奏
+
+```
+每日: Paper Portfolio + Risk Report + Health Score
+每周: 回撤 / Sharpe / Regime 表现
+每月: 参数微调（唯一允许动作）
+```
+
+### 每日运行管线（最终形态）
+
+```
+每日数据 → 信号 → 过滤 → 风险预算 → 组合调整 → 模拟盘 → 记录 → 日报
+```
+
+---
+
 ## 🖥️ UI / Streamlit Dashboard
 
 ### 启动方式
@@ -248,6 +371,7 @@ streamlit run frontend/streamlit_app.py --server.port 8502
 
 ```
 /intelligence    ← 策略智能报告（Regime + Drift + 阈值建议）
+/fund            ← 基金组合管理（v3.4+v3.5：风险预算 + 策略权重 + 再平衡）
 /health          ← 策略健康评分（雷达图 + 四维评分）
 /backtest        ← 历史回测（收益曲线 + 交易记录）
 /signals         ← 实时信号（评分排名 + 操作建议）
@@ -267,10 +391,26 @@ python main_lite.py --backtest            # 历史回测（秒级）
 python main_lite.py --walkforward         # Walk-Forward 验证
 python main_lite.py --evaluate            # 策略评分 + 信号漂移
 
+# ── v3.4+v3.5 基金组合管理 ─────────────────────────────
+python main_lite.py --fund               # 基金组合日报
+python main_lite.py --fund --feishu      # + 飞书基金日报
+
 # ── v3.3 智能监控 ───────────────────────────────────────
 python main_lite.py --intelligence        # 轻量智能报告
 python main_lite.py --intelligence-full   # 完整智能报告
 streamlit run frontend/streamlit_app.py    # Web Dashboard
+
+# ── v3.6 每日自动化 ───────────────────────────────────────
+python3 scripts/daily_run.py                  # 每日一次（本地）
+./scripts/daily_run_retry.sh                  # 失败每小时重试直到成功
+python3 scripts/daily_run.py --check-only     # 检查今日是否已成功
+
+# GitHub Actions: .github/workflows/daily-report.yml
+#   工作日 16:30–22:30 北京时间，每小时触发，成功后自动跳过
+#   需在 repo Secrets 配置 FEISHU_WEBHOOK_URL
+
+# 本地开发后务必 push 到 GitHub，Actions 才能跑到最新代码:
+#   git add -A && git commit -m "..." && git push origin main
 
 # ── 其他 ────────────────────────────────────────────────
 python main_lite.py --reset               # 重置模拟账户
@@ -297,17 +437,25 @@ EcohTangoFoxtra/
 │   ├── drift_monitor.py          ✅ v3.3 策略漂移检测
 │   ├── threshold_suggester.py    ✅ v3.3 自适应阈值建议
 │   ├── strategy_health.py         ✅ v3.3 健康评分 + 综合报告
+│   ├── risk_budget_engine.py      ✅ v3.4 风险预算引擎
+│   ├── strategy_pool.py           ✅ v3.5 多策略注册池
+│   ├── strategy_weight_allocator.py ✅ v3.5 策略权重分配
+│   ├── portfolio_constructor.py   ✅ v3.5 组合构建
+│   ├── risk_parity_engine.py      ✅ v3.5 风险平价
+│   ├── rebalance_engine.py        ✅ v3.5 再平衡引擎
+│   ├── fund_manager.py            ✅ v3.4+v3.5 编排层
 │   ├── feishu_lite.py            ✅ 飞书卡片（展示层）
 │   ├── feishu_reporter.py        ✅ 飞书消息（展示层）
 │   └── backtest.db               🔒 SQLite 历史数据
 ├── frontend/
-│   └── streamlit_app.py          ✅ v3.3 Streamlit Dashboard
+│   └── streamlit_app.py          ✅ v3.5 Streamlit Dashboard（含 /fund）
 ├── docs/
 │   ├── index.html                ✅ GitHub Pages 入口
 │   ├── lite_card.md              ✅ 飞书决策卡
 │   ├── backtest_report.html      ✅ 回测可视化报告
+│   ├── fund_report.md            ✅ 基金组合日报
 │   └── SPEC.md                   ← 系统宪法
-├── main_lite.py                  ← 统一入口（v3.3）
+├── main_lite.py                  ← 统一入口（v3.5）
 ├── run_pipeline.py               ← v2 旧入口
 └── build_report.py               ← 静态报告构建
 ```
@@ -324,6 +472,9 @@ EcohTangoFoxtra/
 | **v3.1** | **2026-07-02** | **封版：冻结核心逻辑 + v3.1 模拟盘三规则** |
 | **v3.2** | **2026-07-02** | **新增：回测引擎 + Walk-Forward + 策略评分 + 信号漂移检测** |
 | **v3.3** | **2026-07-02** | **新增：Regime Detector + Drift Monitor + Threshold Suggester + Strategy Health + Streamlit Dashboard** |
+| **v3.4** | **2026-07-02** | **新增：Risk Budget Engine — regime → 风险预算映射** |
+| **v3.5** | **2026-07-02** | **新增：Strategy Pool + Weight Allocator + Portfolio Constructor + Risk Parity + Rebalance + /fund Dashboard** |
+| **v3.6 Final** | **2026-07-02** | **稳定化收敛：信号过滤 + 权重平滑 + 再平衡节流 + 连亏保护 + 功能冻结** |
 
 ---
 

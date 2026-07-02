@@ -254,3 +254,114 @@ def save_lite_card(
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     return os.path.abspath(path)
+
+
+# ── v3.4+v3.5 Fund Report ───────────────────────────────────────────────────
+
+def build_fund_card(report: dict) -> str:
+    """构建 Daily Fund Report 文字卡片。"""
+    from fund_manager import format_fund_report
+    return format_fund_report(report)
+
+
+def build_fund_card_json(report: dict) -> dict:
+    """构建飞书基金日报交互卡片 JSON。"""
+    s = report.get("summary", {})
+    rb = report.get("risk_budget", {})
+    sa = report.get("strategy_allocation", {}).get("weights", {})
+    regime = s.get("regime", "Unknown")
+    now = datetime.now().strftime("%Y-%m-%d")
+
+    regime_color = {
+        "Bull": "green", "Sideways": "yellow",
+        "Bear": "red", "HighVolatility": "orange",
+    }.get(regime, "blue")
+
+    strat_lines = "\n".join(
+        f"• **{k.replace('_', ' ').title()}**: {v:.0%}"
+        for k, v in sa.items()
+    )
+    holdings_lines = "\n".join(
+        f"• {h['name']} **{h['weight']:.0%}** ({h.get('risk_level', 'MED')})"
+        for h in s.get("top_holdings", [])
+    )
+    risk_lines = "\n".join(
+        f"• {report['portfolio']['names'].get(c, c)}: **{lvl}**"
+        for c, lvl in report.get("risk_parity", {}).get("risk_levels", {}).items()
+    )
+    stab = report.get("stability", {})
+    stab_status = report.get("summary", {}).get("stability_status", "normal")
+    stab_lines = f"**Status**: {stab_status.upper()}"
+    if stab.get("consecutive_loss", {}).get("triggered"):
+        stab_lines += f"\n⚠️ 连亏保护 {stab['consecutive_loss']['streak']} 天"
+    if stab.get("rebalance_gated"):
+        stab_lines += "\n🔒 再平衡已节流"
+    for note in stab.get("stability_notes", []):
+        stab_lines += f"\n• {note}"
+
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {"tag": "plain_text", "content": f"🏦 Daily Fund Report {now}"},
+                "template": regime_color,
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "markdown",
+                        "content": (
+                            f"**Portfolio Risk**: {s.get('portfolio_risk_pct', 0):.1f}%\n"
+                            f"**Regime**: {regime}"
+                        ),
+                    },
+                },
+                {"tag": "hr"},
+                {"tag": "markdown", "content": f"**🛡️ Stability (v3.6)**\n{stab_lines}"},
+                {"tag": "markdown", "content": f"**Strategy Allocation**\n{strat_lines}"},
+                {"tag": "markdown", "content": f"**Top Holdings**\n{holdings_lines}"},
+                {"tag": "markdown", "content": f"**Risk Contribution**\n{risk_lines}"},
+                {
+                    "tag": "div",
+                    "text": {
+                        "tag": "markdown",
+                        "content": f"**Recommendation**\n→ {s.get('recommendation', 'hold')}",
+                    },
+                },
+                {"tag": "hr"},
+                {
+                    "tag": "note",
+                    "elements": [
+                        {"tag": "plain_text", "content": "⚠️ 基金组合日报由量化模型自动生成，仅供参考，不构成投资建议"}
+                    ],
+                },
+            ],
+        },
+    }
+
+
+def send_fund_card(report: dict) -> dict:
+    """发送基金日报到飞书 webhook。"""
+    webhook_url = os.environ.get("FEISHU_WEBHOOK_URL", "")
+    card_text = build_fund_card(report)
+    result = {"sent": False, "text": card_text, "webhook_configured": bool(webhook_url)}
+
+    if webhook_url:
+        try:
+            import requests
+            r = requests.post(webhook_url, json=build_fund_card_json(report), timeout=10)
+            result["sent"] = r.status_code == 200
+            result["response"] = r.text[:100]
+        except Exception as e:
+            result["error"] = str(e)
+    return result
+
+
+def save_fund_card(report: dict, path: str = "docs/fund_report.md") -> str:
+    """保存基金日报到文件。"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    text = build_fund_card(report)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return os.path.abspath(path)

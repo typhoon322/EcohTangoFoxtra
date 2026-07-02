@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main_lite.py — EcohTangoFoxtra v3.3（封版核心 + 智能监控层）
+main_lite.py — EcohTangoFoxtra v3.6 Final（稳定化收敛版）
 =================================================================
 极简管线：数据 → 打分 → 排序 → 决策 → 模拟盘 → 飞书
 
@@ -33,6 +33,12 @@ main_lite.py — EcohTangoFoxtra v3.3（封版核心 + 智能监控层）
   python main_lite.py --evaluate      # 策略评估 + 信号漂移
   python main_lite.py --intelligence  # v3.3 策略智能报告（轻量）
   python main_lite.py --intelligence-full  # v3.3 完整智能报告（含历史分析）
+  python main_lite.py --fund               # v3.4+v3.5 基金组合日报
+  python main_lite.py --fund --feishu      # + 发送飞书基金日报
+
+🔒 v3.6 Final 收敛规则:
+  ❌ 禁止: 新策略 / 新指标 / 新模块 / 新回测框架 / 新资产
+  ✅ 允许: 参数微调 / 稳定性抑制 / UI展示
 """
 
 import argparse
@@ -415,6 +421,7 @@ def main() -> None:
     parser.add_argument("--walkforward", action="store_true", help="Walk-Forward 滚动验证")
     parser.add_argument("--intelligence", action="store_true", help="v3.3 策略智能报告（实时 Regime + Drift + 阈值建议）")
     parser.add_argument("--intelligence-full", action="store_true", help="v3.3 完整智能报告（含健康评分 + 分状态回测）")
+    parser.add_argument("--fund", action="store_true", help="v3.4+v3.5 基金组合日报（风险预算 + 多策略组合）")
     args = parser.parse_args()
 
     if args.reset:
@@ -474,6 +481,32 @@ def main() -> None:
         print("════════════════════════════════════════════")
         print(format_wf_report(wf))
         print("════════════════════════════════════════════")
+        return
+
+    # ── v3.4+v3.5: Fund Management Report ─────────────────────────────────────
+    if args.fund:
+        from backend.fund_manager import build_fund_report, format_fund_report
+        from backend.feishu_lite import send_fund_card, save_fund_card
+
+        log("🏦 构建基金组合日报...")
+        assets, _ = step_data()
+        scored = step_score(assets)
+        report = build_fund_report(scored_assets=scored)
+        text = format_fund_report(report)
+        print()
+        print(text)
+
+        save_path = save_fund_card(report, path="docs/fund_report.md")
+        log(f"   → {save_path}")
+
+        if args.feishu:
+            result = send_fund_card(report)
+            if result["sent"]:
+                log("   ✅ 飞书基金日报发送成功")
+            elif result["webhook_configured"]:
+                log(f"   ⚠️ 飞书发送失败: {result.get('error', result.get('response', ''))}")
+            else:
+                log("   ℹ️ 未配置飞书 webhook")
         return
 
     # ── v3.3: Intelligence Report ─────────────────────────────────────────────

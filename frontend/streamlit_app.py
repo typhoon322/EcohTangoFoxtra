@@ -53,10 +53,16 @@ section[data-testid="stSidebar"] { background-color: #161b22; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠 EcohTangoFoxtra v3.3 — Strategy Intelligence Dashboard")
+st.title("🧠 EcohTangoFoxtra v3.6 Final — Research Paper Fund")
 
 
 # ── Load data ─────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=3600)
+def load_fund():
+    from backend.fund_manager import build_fund_report
+    return build_fund_report()
+
 
 @st.cache_data(ttl=3600)
 def load_all():
@@ -75,6 +81,7 @@ def load_all():
 
 
 intel, snaps, trades, dates = load_all()
+fund = load_fund()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -109,8 +116,8 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1: Strategy Intelligence
 # ═══════════════════════════════════════════════════════════════════════════════
-tab_intel, tab_health, tab_backtest, tab_signals = st.tabs(
-    ["🧠 Intelligence", "🏥 健康评分", "📊 回测", "🎯 信号"]
+tab_intel, tab_fund, tab_health, tab_backtest, tab_signals = st.tabs(
+    ["🧠 Intelligence", "🏦 Fund", "🏥 健康评分", "📊 回测", "🎯 信号"]
 )
 
 with tab_intel:
@@ -255,6 +262,121 @@ with tab_intel:
         st.write(f"**建议**: {drift.get('recommendation', '')}")
     else:
         st.success("✅ 策略表现正常，无漂移")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: Fund Management (v3.4 + v3.5 + v3.6 Stability)
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_fund:
+    fs = fund.get("summary", {})
+    rb = fund.get("risk_budget", {})
+    sa = fund.get("strategy_allocation", {}).get("weights", {})
+    pw = fund.get("portfolio", {}).get("weights", {})
+    rp = fund.get("risk_parity", {})
+    reb = fund.get("rebalance", {})
+    stab = fund.get("stability", {})
+
+    fc1, fc2, fc3, fc4, fc5 = st.columns(5)
+    regime_emoji = {"Bull": "🐂", "Bear": "🐻", "Sideways": "↔️", "HighVolatility": "⚡"}.get(
+        fs.get("regime", ""), "??"
+    )
+    stab_status = fs.get("stability_status", "normal")
+    fc1.metric("组合风险预算", f"{fs.get('portfolio_risk_pct', 0):.1f}%",
+               f"乘数 {rb.get('regime_multiplier', 1):.2f}")
+    fc2.metric("市场状态", f"{regime_emoji} {fs.get('regime', 'Unknown')}")
+    fc3.metric("稳定层", "🛡️ 保护中" if stab_status == "protected" else "✅ 正常",
+               f"连亏 {stab.get('consecutive_loss', {}).get('streak', 0)} 天")
+    fc4.metric("再平衡", "🔒 节流" if reb.get("gated") else ("需要" if reb.get("needs_rebalance") else "无需"),
+               reb.get("recommendation", "")[:25])
+    fc5.metric("平滑", "已启用" if stab.get("smoothing_applied") else "初始化",
+               f"α={stab.get('params', {}).get('weight_smoothing_alpha', 0.3)}")
+
+    # v3.6 stability notes
+    notes = stab.get("stability_notes", []) or rb.get("stability_notes", [])
+    if notes or stab.get("suppressed_strategies"):
+        with st.expander("🛡️ v3.6 稳定层状态", expanded=stab_status == "protected"):
+            for note in notes:
+                st.warning(note)
+            if stab.get("suppressed_strategies"):
+                st.info(f"低质量信号已抑制: {', '.join(stab['suppressed_strategies'])}")
+            if reb.get("gated"):
+                st.info(f"再平衡节流: drift 阈值 {reb.get('drift_threshold_pct', 5):.0f}%, "
+                        f"最短间隔 {stab.get('params', {}).get('min_rebalance_days', 5)} 天")
+
+    st.divider()
+
+    col_left, col_right = st.columns(2)
+
+    with col_left:
+        st.subheader("📊 策略权重分配")
+        strat_names = {"trend": "趋势跟踪", "mean_reversion": "均值回归", "momentum": "动量突破"}
+        if sa:
+            fig = go.Figure(go.Pie(
+                labels=[strat_names.get(k, k) for k in sa],
+                values=list(sa.values()),
+                hole=0.4,
+                marker_colors=["#58a6ff", "#3fb950", "#f0883e"],
+            ))
+            fig.update_layout(height=280, margin=dict(l=20, r=20, t=20, b=20),
+                              paper_bgcolor="transparent")
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col_right:
+        st.subheader("🏦 Top Holdings")
+        if pw:
+            names = fund.get("portfolio", {}).get("names", {})
+            fig = go.Figure(go.Bar(
+                x=[names.get(c, c) for c in pw],
+                y=list(pw.values()),
+                marker_color="#58a6ff",
+                text=[f"{v:.0%}" for v in pw.values()],
+                textposition="outside",
+            ))
+            fig.update_layout(height=280, yaxis=dict(tickformat=".0%"),
+                              margin=dict(l=20, r=20, t=20, b=20),
+                              paper_bgcolor="transparent")
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+    st.subheader("⚖️ 风险贡献分布")
+    rc = rp.get("risk_contributions", {})
+    rl = rp.get("risk_levels", {})
+    if rc:
+        risk_colors = {"HIGH": "#f85149", "MED": "#d29922", "LOW": "#3fb950"}
+        names = fund.get("portfolio", {}).get("names", {})
+        risk_rows = []
+        for code, contrib in rc.items():
+            risk_rows.append({
+                "标的": names.get(code, code),
+                "权重": f"{pw.get(code, 0):.0%}",
+                "风险贡献": f"{contrib:.0%}",
+                "风险等级": rl.get(code, "MED"),
+            })
+        st.dataframe(risk_rows, use_container_width=True, hide_index=True)
+
+        fig = go.Figure(go.Bar(
+            x=[names.get(c, c) for c in rc],
+            y=list(rc.values()),
+            marker_color=[risk_colors.get(rl.get(c, "MED"), "#58a6ff") for c in rc],
+            text=[f"{v:.0%}" for v in rc.values()],
+            textposition="outside",
+        ))
+        fig.update_layout(height=250, yaxis_title="风险贡献",
+                          margin=dict(l=40, r=20, t=20, b=40),
+                          paper_bgcolor="transparent")
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("🔄 再平衡建议")
+    if reb.get("needs_rebalance"):
+        for sig in reb.get("signals", []):
+            if sig["action"] == "increase":
+                st.info(f"⬆️ {sig['message']}")
+            elif sig["action"] == "reduce":
+                st.warning(f"⬇️ {sig['message']}")
+    else:
+        st.success(f"✅ {reb.get('recommendation', 'hold current allocation')}")
+
+    st.caption(f"生成时间: {fund.get('generated_at', 'N/A')}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -484,6 +606,6 @@ with tab_signals:
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()
 st.caption(
-    f"EcohTangoFoxtra v3.3 | 数据时间: {intel.get('generated_at', 'N/A')} | "
+    f"EcohTangoFoxtra v3.6 Final | 数据时间: {intel.get('generated_at', 'N/A')} | "
     f"快照 {len(snaps)} 条 | 交易 {len(trades)} 笔"
 )

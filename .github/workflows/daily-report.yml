@@ -1,0 +1,78 @@
+name: Daily Fund Report
+
+on:
+  # 北京时间 16:30–22:30，每小时一次（UTC 08:30–14:30，工作日）
+  # 首次成功后后续触发会自动跳过
+  schedule:
+    - cron: "30 8 * * 1-5"
+    - cron: "30 9 * * 1-5"
+    - cron: "30 10 * * 1-5"
+    - cron: "30 11 * * 1-5"
+    - cron: "30 12 * * 1-5"
+    - cron: "30 13 * * 1-5"
+    - cron: "30 14 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-report-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Restore simulation state
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/paper_state.json
+            backend/fund_state.json
+            backend/backtest.db
+          key: sim-state-v1-${{ github.ref_name }}
+          restore-keys: |
+            sim-state-v1-${{ github.ref_name }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Skip if already succeeded today
+        id: skip
+        run: |
+          if python3 scripts/daily_run.py --check-only; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run daily pipeline
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+        run: python3 scripts/daily_run.py
+
+      - name: Commit updated reports
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html docs/lite_card.md docs/fund_report.md docs/.daily_run_status.json
+          if git diff --staged --quiet; then
+            echo "No report changes to commit"
+          else
+            git commit -m "chore: daily report $(date -u +%Y-%m-%d)"
+            git push
+          fi
