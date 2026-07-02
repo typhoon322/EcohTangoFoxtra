@@ -41,10 +41,10 @@ jobs:
           path: |
             backend/paper_state.json
             backend/fund_state.json
-            backend/backtest.db
           key: sim-state-v1-${{ github.ref_name }}
           restore-keys: |
             sim-state-v1-${{ github.ref_name }}
+        # 注意: backtest.db 从 git checkout，不用 cache 覆盖（避免空库覆盖种子数据）
 
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -70,9 +70,26 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/index.html docs/lite_card.md docs/fund_report.md docs/.daily_run_status.json
+
           if git diff --staged --quiet; then
             echo "No report changes to commit"
-          else
-            git commit -m "chore: daily report $(date -u +%Y-%m-%d)"
-            git push
+            exit 0
           fi
+
+          git commit -m "chore: daily report $(date -u +%Y-%m-%d)"
+
+          # pull + 冲突自动处理 + push（最多重试 3 次）
+          for attempt in 1 2 3; do
+            echo "Push attempt $attempt ..."
+            git pull --rebase origin main || {
+              bash scripts/resolve_conflicts_ci.sh
+              git rebase --continue || true
+            }
+            if git push origin main; then
+              echo "Push succeeded"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Push failed after 3 attempts"
+          exit 1

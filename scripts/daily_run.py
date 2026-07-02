@@ -32,23 +32,42 @@ REQUIRED_OUTPUTS = [
 ]
 
 MIN_PRICE_ROWS = 500  # 低于此值触发 backfill（CI 首次运行）
+STALE_DAYS = 3        # price_history 落后超过 N 天则在 runner 内 refresh（不写回 git）
 
 
 def ensure_database() -> bool:
-    """初始化 SQLite schema；price_history 为空时自动 backfill。"""
+    """初始化 SQLite schema；空库或过期数据时 backfill（runner 内，不自动 push db）。"""
     sys.path.insert(0, str(ROOT / "backend"))
-    from backtest_store import init_schema, init_price_history_schema, get_price_record_count
+    from backtest_store import init_schema, init_price_history_schema, get_price_record_count, get_all_dates
+    from datetime import datetime as dt
 
     log("🗄️ 检查数据库...")
     init_schema()
     init_price_history_schema()
     n = get_price_record_count()
-    log(f"   price_history: {n} 条")
+    dates = get_all_dates()
+    latest = dates[-1] if dates else None
+    log(f"   price_history: {n} 条, 最新日期: {latest or '无'}")
 
-    if n >= MIN_PRICE_ROWS:
+    need_backfill = n < MIN_PRICE_ROWS
+    if latest and not need_backfill:
+        try:
+            latest_dt = dt.strptime(latest[:10], "%Y-%m-%d").date()
+            stale = (dt.now().date() - latest_dt).days
+            if stale > STALE_DAYS:
+                log(f"   数据过期 {stale} 天，runner 内 refresh（不 commit db）...")
+                need_backfill = True
+        except ValueError:
+            pass
+
+    if not need_backfill:
         return True
 
-    log(f"   数据不足（<{MIN_PRICE_ROWS}），开始 backfill（约 2–5 分钟）...")
+    if n >= MIN_PRICE_ROWS:
+        log("   增量 refresh backfill...")
+    else:
+        log(f"   数据不足（<{MIN_PRICE_ROWS}），开始 backfill（约 2–5 分钟）...")
+
     from backfill_engine import backfill_all
 
     result = backfill_all(show_progress=True)

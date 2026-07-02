@@ -413,7 +413,18 @@ python3 scripts/daily_run.py --check-only     # 检查今日是否已成功
 #   生成: python3 scripts/encode_feishu_hook.py <hook-uuid>
 
 # 本地开发后务必 push 到 GitHub，Actions 才能跑到最新代码:
-#   git add -A && git commit -m "..." && git push origin main
+#   ./scripts/git_sync.sh push          # 推荐：自动 pull + 解决冲突 + push
+#   git add -A && git commit -m "..." && ./scripts/git_sync.sh push
+
+# 冲突自动处理策略 (scripts/git_sync.sh):
+#   docs/* 日报文件     → 保留远程（CI 已发布版本）
+#   backend/backtest.db → 保留本地（你的 backfill 为准）
+
+# 云端 (GitHub Actions) 数据行为:
+#   ✅ 每天 commit: docs/index.html, lite_card.md, fund_report.md
+#   ✅ 每天 cache:   paper_state.json, fund_state.json（模拟盘状态，不进 git）
+#   📦 backtest.db: 从 git checkout；过期 >3 天则在 runner 内 backfill（不写回 git）
+#   ❌ 不会自动 push 更新后的 backtest.db（由本地 backfill 后手动 push）
 
 # ── 其他 ────────────────────────────────────────────────
 python main_lite.py --reset               # 重置模拟账户

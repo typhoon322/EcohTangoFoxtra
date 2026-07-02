@@ -25,6 +25,12 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
 }
 
+# 跑 daily 前先与远程同步，避免本地/CI 报告冲突
+if [ -x "$ROOT/scripts/git_sync.sh" ]; then
+  log "同步远程（自动处理冲突）..."
+  bash "$ROOT/scripts/git_sync.sh" pull >> "$LOG_FILE" 2>&1 || log "⚠️ git sync 警告（继续运行）"
+fi
+
 # 已成功则直接退出
 if "$PYTHON" scripts/daily_run.py --check-only 2>/dev/null; then
   log "今日已成功，无需重试"
