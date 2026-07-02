@@ -27,3 +27,6 @@ tmp/
 
 # Generated report data (the report.html is the deliverable)
 frontend/report_data.json
+
+# Auto-generated simulation state
+backend/paper_state.json

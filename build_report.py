@@ -12,6 +12,29 @@ import sys, os, json
 from datetime import datetime
 
 
+def build_report_from_data(
+    regime: dict,
+    ranked: list,
+    sector_signals: list,
+    portfolio: dict,
+    paper_snapshot: dict = None,
+) -> str:
+    """
+    Generate static HTML report from already-computed pipeline data.
+    Called by main_lite.py --report to avoid re-fetching data.
+    Returns the file path.
+    """
+    data = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "regime": regime,
+        "ranked": ranked[:15],
+        "sector_signals": sector_signals,
+        "portfolio": {k: v for k, v in portfolio.items() if k != "actions"},
+        "paper_snapshot": paper_snapshot,
+    }
+    return _generate_html(data)
+
+
 def generate_v2_html(regime, ranked, rotation_signals, portfolio, macro, advice) -> str:
     """
     Generate a rich standalone HTML report with all v2 pipeline data.
