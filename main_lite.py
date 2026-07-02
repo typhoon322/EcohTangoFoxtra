@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-main_lite.py — EcohTangoFoxtra v3.1 + v3.2（封版核心）
+main_lite.py — EcohTangoFoxtra v3.3（封版核心 + 智能监控层）
 =================================================================
 极简管线：数据 → 打分 → 排序 → 决策 → 模拟盘 → 飞书
 
@@ -15,6 +15,10 @@ main_lite.py — EcohTangoFoxtra v3.1 + v3.2（封版核心）
   - backend/strategy_evaluation.py 策略评估
 
 ✅ 唯一允许修改的层: frontend/ + docs/ (UI/展示层)
+  v3.3 新增: backend/regime_detector.py（只读数据，不改策略）
+  v3.3 新增: backend/drift_monitor.py（只读数据，不改策略）
+  v3.3 新增: backend/threshold_suggester.py（只输出建议，不改策略）
+  v3.3 新增: backend/strategy_health.py（综合分析层）
 
 用法:
   python main_lite.py                # 仅运行管线（打印摘要）
@@ -23,11 +27,12 @@ main_lite.py — EcohTangoFoxtra v3.1 + v3.2（封版核心）
   python main_lite.py --report        # + 生成静态网页
   python main_lite.py --all          # 全部执行
   python main_lite.py --reset         # 重置模拟账户
-  python main_lite.py --evaluate      # v3.2 策略评估 + 信号漂移检测
-  python main_lite.py --backtest      # v3.2 历史回测
-  python main_lite.py --walkforward   # v3.2 Walk-Forward 滚动验证
-
-所有计算在本地完成，飞书只接收最终决策卡（约 300–500 字）。
+  python main_lite.py --backfill      # 回填历史K线（一次性）
+  python main_lite.py --backtest     # 历史回测
+  python main_lite.py --walkforward  # Walk-Forward滚动验证
+  python main_lite.py --evaluate      # 策略评估 + 信号漂移
+  python main_lite.py --intelligence  # v3.3 策略智能报告（轻量）
+  python main_lite.py --intelligence-full  # v3.3 完整智能报告（含历史分析）
 """
 
 import argparse
@@ -408,6 +413,8 @@ def main() -> None:
     parser.add_argument("--evaluate", action="store_true", help="策略评估 + 信号漂移检测")
     parser.add_argument("--backtest", action="store_true", help="历史回测")
     parser.add_argument("--walkforward", action="store_true", help="Walk-Forward 滚动验证")
+    parser.add_argument("--intelligence", action="store_true", help="v3.3 策略智能报告（实时 Regime + Drift + 阈值建议）")
+    parser.add_argument("--intelligence-full", action="store_true", help="v3.3 完整智能报告（含健康评分 + 分状态回测）")
     args = parser.parse_args()
 
     if args.reset:
@@ -467,6 +474,40 @@ def main() -> None:
         print("════════════════════════════════════════════")
         print(format_wf_report(wf))
         print("════════════════════════════════════════════")
+        return
+
+    # ── v3.3: Intelligence Report ─────────────────────────────────────────────
+    if args.intelligence or args.intelligence_full:
+        from backend.strategy_health import build_intelligence_report, format_intelligence_report
+
+        report = build_intelligence_report()
+        print()
+        print("══════════════════════════════════════════════════════════════")
+        print(format_intelligence_report(report))
+        print("══════════════════════════════════════════════════════════════")
+
+        if args.intelligence_full:
+            # Also show detailed health + breakdown
+            health = report.get("health", {})
+            breakdown = report.get("breakdown", {})
+            dims = health.get("dimensions", {})
+            metrics = health.get("metrics", {})
+            print()
+            print("🏥 策略健康评分详情:")
+            print(f"   Alpha (超额收益)        {dims.get('alpha',0):.1f}  "
+                  f"年化超额 {metrics.get('alpha_pct',0):+.2f}%")
+            print(f"   Stability (稳定性)      {dims.get('stability',0):.1f}")
+            print(f"   Drawdown Control        {dims.get('drawdown_control',0):.1f}  "
+                  f"最大回撤 {metrics.get('max_drawdown_pct',0):.1f}%")
+            print(f"   Robustness (鲁棒性)     {dims.get('robustness',0):.1f}")
+            print()
+            print("📊 分状态回测收益:")
+            bd = breakdown.get("breakdown", {})
+            for r in ["Bull", "Bear", "Sideways"]:
+                if r in bd:
+                    d = bd[r]
+                    print(f"   {r:10s} 均{d['avg_return_pct']:+.2f}% "
+                          f"胜率{d['win_rate']:.0f}% Episodes:{d['episodes']}")
         return
 
     feishu = args.feishu or args.all
