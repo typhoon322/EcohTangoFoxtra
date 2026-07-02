@@ -31,6 +31,34 @@ REQUIRED_OUTPUTS = [
     ROOT / "docs" / "index.html",
 ]
 
+MIN_PRICE_ROWS = 500  # 低于此值触发 backfill（CI 首次运行）
+
+
+def ensure_database() -> bool:
+    """初始化 SQLite schema；price_history 为空时自动 backfill。"""
+    sys.path.insert(0, str(ROOT / "backend"))
+    from backtest_store import init_schema, init_price_history_schema, get_price_record_count
+
+    log("🗄️ 检查数据库...")
+    init_schema()
+    init_price_history_schema()
+    n = get_price_record_count()
+    log(f"   price_history: {n} 条")
+
+    if n >= MIN_PRICE_ROWS:
+        return True
+
+    log(f"   数据不足（<{MIN_PRICE_ROWS}），开始 backfill（约 2–5 分钟）...")
+    from backfill_engine import backfill_all
+
+    result = backfill_all(show_progress=True)
+    total = result.get("total_rows", 0)
+    if total < 100:
+        log(f"❌ backfill 失败或数据过少: {result}")
+        return False
+    log(f"✅ backfill 完成: {total} 条, {result.get('date_range', '')}")
+    return True
+
 
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S")
@@ -110,6 +138,10 @@ def run_daily(force: bool = False) -> int:
     log("=" * 50)
     log(f"EcohTangoFoxtra 每日管线 {today_str()}")
     log("=" * 50)
+
+    if not ensure_database():
+        write_status(False, {"failed_step": "ensure_database"})
+        return 1
 
     main = str(ROOT / "main_lite.py")
 

@@ -20,20 +20,34 @@ def _conn():
 
 def _latest_date():
     """返回 price_history 最近一条记录日期。"""
-    with _conn() as c:
-        row = c.execute("SELECT MAX(date) FROM price_history").fetchone()
-        return row[0] if row else None
+    try:
+        with _conn() as c:
+            if not c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='price_history'"
+            ).fetchone():
+                return None
+            row = c.execute("SELECT MAX(date) FROM price_history").fetchone()
+            return row[0] if row else None
+    except sqlite3.OperationalError:
+        return None
 
 
 def _price_window(days: int = 120) -> list[dict]:
     """取最近 N 个交易日的 OHLCV 数据，按日期升序。"""
     cutoff = (datetime.now() - timedelta(days=days * 2)).strftime("%Y-%m-%d")
-    with _conn() as c:
-        rows = c.execute(
-            "SELECT date, code, close, ma20, ma60 FROM price_history "
-            "WHERE date >= ? ORDER BY date",
-            (cutoff,),
-        ).fetchall()
+    try:
+        with _conn() as c:
+            if not c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='price_history'"
+            ).fetchone():
+                return []
+            rows = c.execute(
+                "SELECT date, code, close, ma20, ma60 FROM price_history "
+                "WHERE date >= ? ORDER BY date",
+                (cutoff,),
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return []
     cols = ["date", "code", "close", "ma20", "ma60"]
     return [dict(zip(cols, r)) for r in rows]
 
