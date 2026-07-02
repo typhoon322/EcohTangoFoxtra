@@ -86,7 +86,7 @@ try:
             ok = send_to_feishu_webhook(webhook, card_json)
             print(f"   {'✅' if ok else '❌'} 飞书推送: {'成功' if ok else '失败'}")
         else:
-            print("   ⚠️ 未设置 FEISHU_WEBHOOK_URL 环境变量，跳过飞书推送")
+            print("   ⚠️ 未配置飞书推送（设置 LARK_PUSH_CFG 或 .env）")
 except Exception as e:
     print(f"   ⚠️ 飞书推送异常: {e}")
 
