@@ -62,6 +62,7 @@ jobs:
         if: steps.skip.outputs.skip != 'true'
         env:
           LARK_PUSH_CFG: ${{ secrets.LARK_PUSH_CFG }}
+          SINA_REQUEST_DELAY: "1.0"
         run: python3 scripts/daily_run.py
 
       - name: Commit updated reports

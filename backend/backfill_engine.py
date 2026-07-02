@@ -4,6 +4,7 @@ backfill_engine.py — EcohTangoFoxtra v3.2
 """
 
 import math
+import os
 import time
 import requests
 import pandas as pd
@@ -18,7 +19,7 @@ from backtest_store import save_price_batch, get_price_series, init_price_histor
 
 SINA_KLINE_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
 FETCH_DAYS = 800          # 尝试拉取天数（Sina 上限约 700交易日）
-REQUEST_DELAY = 0.3       # 请求间隔（秒），防限速
+REQUEST_DELAY = float(os.environ.get("SINA_REQUEST_DELAY", "0.8"))  # 请求间隔（秒），防限速
 MAX_RETRIES = 3
 
 

@@ -107,3 +107,29 @@ def ensure_keyword(text: str) -> str:
 
 def keyword_footer() -> str:
     return f"⚠️ {KEYWORD_TAG} · 仅供参考，不构成投资建议"
+
+
+def parse_feishu_response(status_code: int, text: str) -> tuple[bool, str]:
+    """
+    飞书 webhook 常返回 HTTP 200 但 body 里 code != 0（如关键词校验失败）。
+    只有 code/StatusCode 为 0 才算真正成功。
+    """
+    if status_code != 200:
+        return False, f"HTTP {status_code}: {text[:200]}"
+    try:
+        body = __import__("json").loads(text)
+        code = body.get("code", body.get("StatusCode"))
+        if code == 0:
+            return True, body.get("msg") or body.get("StatusMessage") or "ok"
+        msg = body.get("msg") or body.get("StatusMessage") or text[:200]
+        return False, f"feishu code={code}: {msg}"
+    except Exception:
+        return True, text[:100]
+
+
+def build_text_payload(text: str) -> dict:
+    """文本消息（关键词校验最可靠）。"""
+    return {
+        "msg_type": "text",
+        "content": {"text": ensure_keyword(text)},
+    }

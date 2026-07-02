@@ -14,7 +14,10 @@ import json
 import os
 from datetime import datetime
 
-from feishu_config import get_webhook_url, is_configured, keyword_footer, ensure_keyword, KEYWORD_TAG
+from feishu_config import (
+    get_webhook_url, is_configured, keyword_footer, ensure_keyword, KEYWORD_TAG,
+    parse_feishu_response, build_text_payload,
+)
 
 # ── 词表 ────────────────────────────────────────────────────────────────────
 
@@ -151,7 +154,7 @@ def build_lite_card_json(regime: dict, top_actions: list,
         "msg_type": "interactive",
         "card": {
             "header": {
-                "title": {"tag": "plain_text", "content": f"📊 ETF决策卡 {now}"},
+                "title": {"tag": "plain_text", "content": f"score 市场 · ETF决策卡 {now}"},
                 "template": color,
             },
             "elements": [
@@ -205,21 +208,44 @@ def build_lite_card_json(regime: dict, top_actions: list,
 # ── 发送 ───────────────────────────────────────────────────────────────────
 
 def _post_feishu(payload: dict) -> dict:
-    """POST 到飞书（URL 从混淆配置解析，日志不输出 URL）。"""
+    """POST 到飞书（URL 从混淆配置解析，校验响应 body）。"""
     webhook_url = get_webhook_url()
-    result = {"sent": False, "webhook_configured": is_configured()}
+    result = {"sent": False, "webhook_configured": is_configured(), "mode": payload.get("msg_type", "?")}
     if not webhook_url:
         return result
     try:
         import requests
         r = requests.post(webhook_url, json=payload, timeout=10)
-        result["sent"] = r.status_code == 200
-        result["response"] = r.text[:100]
-        if not result["sent"]:
-            result["error"] = r.text[:200]
+        ok, detail = parse_feishu_response(r.status_code, r.text)
+        result["sent"] = ok
+        result["response"] = detail
+        if not ok:
+            result["error"] = detail
     except Exception as e:
         result["error"] = str(e)
     return result
+
+
+def _send_with_text_fallback(card_text: str, card_json: dict | None = None) -> dict:
+    """
+    优先发文本（关键词校验可靠）；可选再发 interactive 卡片。
+    若仅卡片模式失败，自动降级为文本。
+    """
+    # 1) 文本消息（与测试成功的方式一致）
+    text_result = _post_feishu(build_text_payload(card_text))
+    if text_result.get("sent"):
+        text_result["delivery"] = "text"
+        return text_result
+
+    # 2) 文本失败时尝试 interactive（部分群机器人仅支持卡片）
+    if card_json:
+        card_result = _post_feishu(card_json)
+        if card_result.get("sent"):
+            card_result["delivery"] = "interactive"
+            return card_result
+        text_result["fallback_error"] = card_result.get("error", card_result.get("response"))
+
+    return text_result
 
 
 def send_lite_card(
@@ -245,7 +271,7 @@ def send_lite_card(
             regime, top_actions, rotation_arrows,
             portfolio_summary, paper_snapshot
         )
-        post = _post_feishu(card_json)
+        post = _send_with_text_fallback(card_text, card_json)
         result.update(post)
 
     return result
@@ -361,7 +387,7 @@ def send_fund_card(report: dict) -> dict:
     result = {"sent": False, "text": card_text, "webhook_configured": is_configured()}
 
     if is_configured():
-        post = _post_feishu(build_fund_card_json(report))
+        post = _send_with_text_fallback(card_text, build_fund_card_json(report))
         result.update(post)
     return result
 

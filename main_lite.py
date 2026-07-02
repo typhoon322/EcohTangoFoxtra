@@ -252,9 +252,10 @@ def step_feishu(
         paper_snapshot=paper_snap,
     )
     if result["sent"]:
-        log("   ✅ 飞书发送成功")
+        mode = result.get("delivery", result.get("mode", ""))
+        log(f"   ✅ 飞书发送成功 ({mode})")
     elif result["webhook_configured"]:
-        log(f"   ⚠️ 飞书发送失败: {result.get('response', result.get('error', 'unknown'))}")
+        log(f"   ⚠️ 飞书发送失败: {result.get('error', result.get('response', 'unknown'))}")
     else:
         log("   ℹ️ 未配置飞书推送（设置 .env 中 LARK_PUSH_CFG）")
     return result
@@ -502,7 +503,7 @@ def main() -> None:
         if args.feishu:
             result = send_fund_card(report)
             if result["sent"]:
-                log("   ✅ 飞书基金日报发送成功")
+                log(f"   ✅ 飞书基金日报发送成功 ({result.get('delivery', 'text')})")
             elif result["webhook_configured"]:
                 log(f"   ⚠️ 飞书发送失败: {result.get('error', result.get('response', ''))}")
             else:

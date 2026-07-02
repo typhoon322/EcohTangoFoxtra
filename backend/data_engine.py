@@ -9,12 +9,18 @@ import requests
 import pandas as pd
 import numpy as np
 import logging
+import os
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 SINA_KLINE_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
+
+# v3.6 控速参数（防 IP 封禁，可通过环境变量调整）
+SINA_REQUEST_DELAY = float(os.environ.get("SINA_REQUEST_DELAY", "0.8"))
+SINA_MAX_RETRIES = int(os.environ.get("SINA_MAX_RETRIES", "3"))
 
 # ── Asset Pool (expanded) ────────────────────────────────────────────
 # ETFs by sector group for rotation analysis
@@ -101,17 +107,24 @@ def fetch_all_quotes() -> list[dict]:
 
 
 def fetch_kline_raw(sina_symbol: str, days: int = 200) -> Optional[list[dict]]:
-    """Raw K-line from Sina API."""
-    try:
-        params = {"symbol": sina_symbol, "scale": "240", "ma": "no", "datalen": str(max(days, 20))}
-        r = requests.get(SINA_KLINE_URL, params=params, timeout=15)
-        if r.status_code != 200:
-            return None
-        data = r.json()
-        return data[-days:] if data else None
-    except Exception as e:
-        logger.error(f"fetch_kline_raw({sina_symbol}): {e}")
-        return None
+    """Raw K-line from Sina API（带重试 + 限速）。"""
+    params = {"symbol": sina_symbol, "scale": "240", "ma": "no", "datalen": str(max(days, 20))}
+    for attempt in range(SINA_MAX_RETRIES):
+        try:
+            r = requests.get(SINA_KLINE_URL, params=params, timeout=15)
+            if r.status_code in (403, 429):
+                wait = (attempt + 1) * 3
+                logger.warning(f"Sina rate-limit {r.status_code}, wait {wait}s ({sina_symbol})")
+                time.sleep(wait)
+                continue
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            return data[-days:] if data else None
+        except Exception as e:
+            logger.error(f"fetch_kline_raw({sina_symbol}): {e}")
+            time.sleep(1)
+    return None
 
 
 def fetch_kline_df(sina_symbol: str, days: int = 200) -> Optional[pd.DataFrame]:
@@ -257,4 +270,6 @@ def fetch_all_assets(progress: bool = True) -> list[dict]:
             result.append(data)
         if progress and (i + 1) % 5 == 0:
             print(f"   📊 [{i+1}/{total}] {asset['name']} OK")
+        if i + 1 < total:
+            time.sleep(SINA_REQUEST_DELAY)
     return result
