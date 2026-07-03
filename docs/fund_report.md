@@ -1,9 +1,9 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-07-02 22:29:51
+  2026-07-03 11:15:22
 ════════════════════════════════════════════
 
-Portfolio Risk: 1.9%
+Portfolio Risk: 1.7%
 Regime: Bear
 
 Strategy Allocation:
@@ -30,13 +30,13 @@ Risk Contribution:
   - 科创50ETF: HIGH
 
 Recommendation:
-  → hold (rebalance gated, 0d < 5d min)
+  → hold (rebalance gated, 1d < 5d min)
 
-Rebalance: gated (hold (rebalance gated, 0d < 5d min))
+Rebalance: gated (hold (rebalance gated, 1d < 5d min))
 
 Stability (v3.6):
   Status: NORMAL
   🔒 再平衡已节流
 
-Risk Budget Detail: total=1.88% multiplier=0.69 max_single=0.63%
+Risk Budget Detail: total=1.73% multiplier=0.64 max_single=0.58%
 ════════════════════════════════════════════
