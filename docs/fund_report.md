@@ -1,6 +1,6 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-07-02 13:51:41
+  2026-07-02 22:29:51
 ════════════════════════════════════════════
 
 Portfolio Risk: 1.9%
@@ -30,23 +30,13 @@ Risk Contribution:
   - 科创50ETF: HIGH
 
 Recommendation:
-  → rebalance to target allocation
+  → hold (rebalance gated, 0d < 5d min)
 
-Rebalance Signal:
-  → increase 518880 14.0%
-  → reduce 512100 9.8%
-  → reduce 159869 9.9%
-  → increase 513100 10.1%
-  → reduce 159985 9.9%
-  → increase 159915 8.3%
-  → increase 512690 15.4%
-  → increase 510300 15.5%
-  → reduce 510500 9.7%
-  → increase 513050 10.2%
-  → increase 510880 20.1%
+Rebalance: gated (hold (rebalance gated, 0d < 5d min))
 
 Stability (v3.6):
   Status: NORMAL
+  🔒 再平衡已节流
 
 Risk Budget Detail: total=1.88% multiplier=0.69 max_single=0.63%
 ════════════════════════════════════════════
