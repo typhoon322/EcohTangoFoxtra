@@ -68,6 +68,9 @@ body {{ background:var(--bg); color:var(--text); font-family:-apple-system,Blink
 .header {{ background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }}
 .header h1 {{ font-size:20px; font-weight:700; }}
 .header .sub {{ font-size:12px; color:var(--text2); }}
+.header-actions {{ display:flex; align-items:center; gap:10px; flex-shrink:0; }}
+.guide-link {{ color:var(--text); text-decoration:none; font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); transition:color .2s,border-color .2s; white-space:nowrap; }}
+.guide-link:hover {{ color:var(--blue); border-color:var(--blue); }}
 .container {{ max-width:1200px; margin:0 auto; padding:24px; }}
 .card {{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:20px; }}
 .card-title {{ font-size:16px; font-weight:700; margin-bottom:12px; }}
@@ -98,6 +101,9 @@ tr:hover td {{ background:rgba(255,255,255,.02); }}
 <body>
 <div class="header">
   <div><h1>📊 ETF 决策面板 v2</h1><div class="sub" id="timestamp">{data['timestamp']}</div></div>
+  <div class="header-actions">
+    <a class="guide-link" href="USER_GUIDE.md" target="_blank" rel="noopener">📖 使用说明</a>
+  </div>
 </div>
 <div class="container" id="app"></div>
 <div class="disclaimer">

@@ -112,12 +112,16 @@ with st.sidebar:
     st.caption(f"**交易记录**: {len(trades)}")
     st.caption(f"**数据范围**: {dates[0] if dates else 'N/A'} → {dates[-1] if dates else 'N/A'}")
 
+    st.divider()
+    st.markdown("**📚 文档**")
+    st.caption("完整说明见顶部 **📖 说明书** 标签页")
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # TAB 1: Strategy Intelligence
 # ═══════════════════════════════════════════════════════════════════════════════
-tab_intel, tab_fund, tab_health, tab_backtest, tab_signals, tab_portfolio = st.tabs(
-    ["🧠 Intelligence", "🏦 Fund", "🏥 健康评分", "📊 回测", "🎯 信号", "📝 持仓录入"]
+tab_intel, tab_fund, tab_health, tab_backtest, tab_signals, tab_portfolio, tab_guide = st.tabs(
+    ["🧠 Intelligence", "🏦 Fund", "🏥 健康评分", "📊 回测", "🎯 信号", "📝 持仓录入", "📖 说明书"]
 )
 
 with tab_intel:
@@ -673,6 +677,20 @@ with tab_portfolio:
             st.rerun()
 
     st.caption("CLI 同等入口: `python3 scripts/record_trade.py buy 510300 1000 4.85`")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB: 说明书
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_guide:
+    guide_path = os.path.join(ROOT, "docs", "USER_GUIDE.md")
+    st.subheader("📖 使用说明书")
+    st.caption("v3.6 · 日常流程、买卖解读、持仓录入 FAQ")
+    if os.path.exists(guide_path):
+        with open(guide_path, encoding="utf-8") as f:
+            st.markdown(f.read())
+    else:
+        st.warning("未找到 `docs/USER_GUIDE.md`，请确认仓库完整。")
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────
