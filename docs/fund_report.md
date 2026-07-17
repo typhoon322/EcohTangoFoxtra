@@ -1,9 +1,9 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-07-16 10:33:27
+  2026-07-17 10:24:14
 ════════════════════════════════════════════
 
-Portfolio Risk: 1.8%
+Portfolio Risk: 2.0%
 Regime: Bear
 
 Strategy Allocation:
@@ -26,28 +26,28 @@ Risk Contribution:
   - 红利ETF: LOW
   - 沪深300ETF: LOW
   - 纳指ETF: MED
-  - 创业板ETF: MED
+  - 创业板ETF: HIGH
   - 科创50ETF: HIGH
 
 Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → reduce 512800 9.9%
-  → increase 510880 9.6%
-  → reduce 512100 8.9%
-  → reduce 510500 9.0%
-  → increase 518880 14.4%
-  → increase 512690 14.7%
-  → reduce 512170 10.0%
+  → reduce 512100 8.5%
+  → reduce 159928 10.0%
   → increase 513100 10.6%
-  → increase 159915 8.4%
-  → reduce 159985 11.9%
-  → reduce 159869 10.3%
-  → increase 510300 15.7%
+  → increase 510880 9.8%
+  → reduce 159985 11.8%
+  → increase 512690 14.8%
+  → reduce 159869 10.0%
+  → reduce 512800 9.9%
+  → increase 159915 8.3%
+  → reduce 510500 8.7%
+  → increase 510300 15.5%
+  → increase 518880 14.5%
 
 Stability (v3.6):
   Status: NORMAL
 
-Risk Budget Detail: total=1.75% multiplier=0.65 max_single=0.58%
+Risk Budget Detail: total=1.99% multiplier=0.66 max_single=0.66%
 ════════════════════════════════════════════
