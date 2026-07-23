@@ -1,9 +1,9 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-07-22 10:44:22
+  2026-07-23 10:45:10
 ════════════════════════════════════════════
 
-Portfolio Risk: 1.9%
+Portfolio Risk: 2.1%
 Regime: Bear
 
 Strategy Allocation:
@@ -33,23 +33,22 @@ Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → increase 518880 14.6%
-  → increase 513100 10.7%
-  → reduce 512100 8.4%
-  → reduce 159985 11.9%
-  → increase 513050 10.3%
-  → reduce 159928 10.0%
-  → increase 159915 8.3%
-  → reduce 510500 8.8%
-  → reduce 515080 9.9%
-  → reduce 159869 9.8%
-  → reduce 510050 9.9%
-  → increase 510300 15.5%
-  → increase 510880 9.7%
+  → reduce 512100 8.5%
   → increase 512690 14.7%
+  → reduce 515080 9.9%
+  → increase 510300 15.6%
+  → increase 513050 10.3%
+  → reduce 512170 10.0%
+  → reduce 510500 8.8%
+  → increase 513100 10.7%
+  → increase 159915 8.3%
+  → reduce 159985 11.9%
+  → increase 518880 14.7%
+  → reduce 512800 9.9%
+  → increase 510880 9.7%
 
 Stability (v3.6):
   Status: NORMAL
 
-Risk Budget Detail: total=1.95% multiplier=0.65 max_single=0.65%
+Risk Budget Detail: total=2.10% multiplier=0.70 max_single=0.70%
 ════════════════════════════════════════════
