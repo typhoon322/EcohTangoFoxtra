@@ -1,6 +1,6 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-08-03 12:03:08
+  2026-08-04 11:10:51
 ════════════════════════════════════════════
 
 Portfolio Risk: 2.1%
@@ -20,11 +20,11 @@ Top Holdings:
   - 中概互联ETF 10%
 
 Risk Contribution:
-  - 酒ETF: MED
   - 中概互联ETF: MED
+  - 酒ETF: MED
   - 黄金ETF: LOW
   - 红利ETF: LOW
-  - 沪深300ETF: MED
+  - 沪深300ETF: LOW
   - 纳指ETF: MED
   - 创业板ETF: HIGH
   - 科创50ETF: HIGH
@@ -33,17 +33,18 @@ Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → reduce 159985 10.6%
-  → reduce 512100 8.5%
-  → increase 512690 14.6%
-  → increase 513100 10.8%
-  → reduce 159928 10.0%
-  → increase 510300 15.5%
+  → reduce 515230 10.0%
   → increase 518880 14.8%
-  → reduce 159869 10.7%
-  → reduce 512800 10.0%
+  → increase 512690 14.6%
+  → reduce 159985 10.5%
+  → increase 510880 9.9%
+  → reduce 512100 8.6%
   → increase 159915 8.1%
-  → increase 510880 10.0%
+  → increase 513050 7.1%
+  → reduce 159869 10.9%
+  → reduce 510500 8.7%
+  → increase 510300 15.5%
+  → reduce 512800 10.0%
 
 Stability (v3.6):
   Status: NORMAL
