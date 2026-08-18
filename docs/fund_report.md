@@ -1,6 +1,6 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-08-17 09:14:54
+  2026-08-18 09:11:55
 ════════════════════════════════════════════
 
 Portfolio Risk: 1.7%
@@ -33,18 +33,17 @@ Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → increase 513100 10.7%
-  → reduce 510050 10.0%
-  → increase 510300 13.2%
+  → increase 510300 5.8%
   → increase 512690 14.6%
-  → increase 510880 19.6%
-  → reduce 159985 10.5%
-  → reduce 159941 9.9%
-  → increase 513050 10.3%
-  → reduce 159869 10.3%
-  → reduce 510500 9.2%
+  → reduce 159869 10.2%
   → increase 518880 5.4%
   → reduce 512100 9.2%
+  → reduce 159985 15.9%
+  → reduce 510500 9.2%
+  → reduce 510050 9.9%
+  → increase 510880 19.6%
+  → increase 513100 10.8%
+  → increase 513050 10.3%
 
 Stability (v3.6):
   Status: NORMAL
