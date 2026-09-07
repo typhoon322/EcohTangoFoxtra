@@ -1,9 +1,9 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-09-04 12:57:34
+  2026-09-07 14:28:49
 ════════════════════════════════════════════
 
-Portfolio Risk: 4.5%
+Portfolio Risk: 4.9%
 Regime: Bull
 
 Strategy Allocation:
@@ -12,18 +12,18 @@ Strategy Allocation:
   - Momentum: 24%
 
 Top Holdings:
-  - 红利ETF 20%
+  - 红利ETF 19%
   - 沪深300ETF 16%
-  - 酒ETF 14%
   - 黄金ETF 14%
+  - 酒ETF 14%
   - 纳指ETF 12%
   - 中概互联ETF 10%
 
 Risk Contribution:
-  - 中概互联ETF: MED
   - 沪深300ETF: LOW
+  - 中概互联ETF: MED
   - 酒ETF: MED
-  - 纳指ETF: MED
+  - 纳指ETF: LOW
   - 创业板ETF: HIGH
   - 黄金ETF: LOW
   - 红利ETF: LOW
@@ -33,24 +33,23 @@ Recommendation:
   → regime shift Bear → Bull, rebalance toward defensive
 
 Rebalance Signal:
-  → increase 513100 11.5%
-  → reduce 159985 12.0%
   → increase 510300 15.5%
-  → increase 513050 10.3%
-  → reduce 510500 8.7%
-  → increase 159915 8.1%
-  → increase 510880 19.5%
-  → reduce 159869 10.4%
-  → reduce 159928 10.0%
-  → reduce 512800 9.9%
-  → reduce 510050 10.0%
-  → reduce 159996 9.9%
-  → reduce 512100 8.8%
-  → increase 512690 14.5%
+  → reduce 159941 9.9%
+  → reduce 512100 8.9%
+  → reduce 512800 10.0%
+  → increase 513100 11.5%
+  → increase 510880 19.4%
+  → reduce 159869 12.0%
   → increase 518880 14.5%
+  → increase 512690 14.5%
+  → increase 159915 8.0%
+  → reduce 159985 11.9%
+  → reduce 510500 8.7%
+  → increase 513050 10.3%
+  → reduce 159996 9.9%
 
 Stability (v3.6):
   Status: NORMAL
 
-Risk Budget Detail: total=4.54% multiplier=0.66 max_single=1.51%
+Risk Budget Detail: total=4.88% multiplier=0.71 max_single=1.63%
 ════════════════════════════════════════════
