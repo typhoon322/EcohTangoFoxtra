@@ -1,6 +1,6 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-09-17 13:51:58
+  2026-09-18 13:10:41
 ════════════════════════════════════════════
 
 Portfolio Risk: 1.6%
@@ -14,7 +14,7 @@ Strategy Allocation:
 Top Holdings:
   - 红利ETF 19%
   - 沪深300ETF 16%
-  - 黄金ETF 15%
+  - 黄金ETF 14%
   - 酒ETF 14%
   - 纳指ETF 12%
   - 中概互联ETF 10%
@@ -33,18 +33,19 @@ Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → reduce 510500 8.7%
-  → increase 518880 14.6%
-  → reduce 159941 9.8%
-  → reduce 512100 8.9%
-  → increase 513050 10.3%
-  → reduce 159985 11.8%
-  → increase 510880 19.3%
-  → reduce 512170 10.0%
-  → increase 510300 15.6%
-  → increase 512690 14.3%
   → increase 159915 8.0%
-  → reduce 512800 9.9%
+  → reduce 159941 9.9%
+  → reduce 159869 5.0%
+  → reduce 512100 9.0%
+  → increase 512690 14.3%
+  → reduce 159985 11.4%
+  → reduce 512170 10.0%
+  → increase 518880 14.5%
+  → increase 510880 19.4%
+  → reduce 159819 10.0%
+  → increase 513050 10.3%
+  → increase 510300 15.6%
+  → reduce 510500 8.9%
 
 Stability (v3.6):
   Status: NORMAL
