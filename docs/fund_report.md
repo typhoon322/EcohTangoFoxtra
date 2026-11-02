@@ -1,9 +1,9 @@
 ════════════════════════════════════════════
   🏦 Daily Fund Report
-  2026-10-30 15:17:31
+  2026-11-02 18:48:08
 ════════════════════════════════════════════
 
-Portfolio Risk: 2.1%
+Portfolio Risk: 2.0%
 Regime: Bear
 
 Strategy Allocation:
@@ -21,7 +21,7 @@ Top Holdings:
 
 Risk Contribution:
   - 中概互联ETF: MED
-  - 酒ETF: LOW
+  - 酒ETF: MED
   - 沪深300ETF: LOW
   - 黄金ETF: LOW
   - 红利ETF: LOW
@@ -33,22 +33,23 @@ Recommendation:
   → rebalance to target allocation
 
 Rebalance Signal:
-  → reduce 515080 7.9%
+  → reduce 159985 11.5%
+  → increase 510300 16.7%
   → increase 518880 13.8%
-  → reduce 159928 7.9%
-  → increase 513100 10.9%
-  → reduce 512800 8.0%
-  → reduce 159985 11.6%
-  → increase 512690 6.4%
-  → increase 159915 8.1%
-  → increase 510300 16.6%
-  → increase 510880 11.6%
-  → reduce 159869 9.6%
+  → increase 510880 11.3%
+  → increase 513050 10.3%
+  → reduce 159928 8.0%
+  → reduce 510500 7.8%
+  → increase 512690 6.2%
   → reduce 512100 7.9%
-  → increase 513050 10.4%
+  → reduce 159869 10.3%
+  → reduce 515080 7.8%
+  → increase 159915 8.1%
+  → increase 513100 11.1%
+  → reduce 512800 8.0%
 
 Stability (v3.6):
   Status: NORMAL
 
-Risk Budget Detail: total=2.15% multiplier=0.72 max_single=0.72%
+Risk Budget Detail: total=1.99% multiplier=0.66 max_single=0.66%
 ════════════════════════════════════════════
